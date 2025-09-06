@@ -4,6 +4,7 @@ import { FaPlus, FaThumbsUp, FaSearch, FaEllipsisH, FaTimes, FaGlobe, FaLock, Fa
 import {GET_SUGGESTED_PAGES,CREATE_PAGE,GET_USER_PAGES,GET_LIKED_PAGES,LIKE_PAGE} from "../../graphql/mutations";
 import {useQuery,useMutation} from "@apollo/client"
 import {GetTokenFromCookie} from "../../components/getToken/GetToken"
+import { toast } from 'react-toastify';
 
 const PagesSection = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const PagesSection = () => {
   const [profileImage, setProfileImage] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const [profilePreview, setProfilePreview] = useState('');
+  const [isCreatingPage, setIsCreatingPage] = useState(false);
   const [categories] = useState([
     'Business', 'Community', 'Entertainment', 'Food & Drink', 'Gaming',
     'Health & Wellness', 'Hobbies', 'Lifestyle', 'News', 'Shopping', 'Technology', 'Other'
@@ -52,14 +54,17 @@ const PagesSection = () => {
 
   const handleCreatePage = async () => {
     if (!token) {
-      alert('No token found');
+      toast.error('Please login to create a page');
       return;
     }
     if(!pageForm.name || !pageForm.category || !pageForm.description || !coverImage || !profileImage){
-      alert('All fields are required');
+      toast.warning('All fields are required to create a page');
       return;
     }
+    
+    setIsCreatingPage(true); // Start loading
     console.log(pageForm,coverImage,profileImage);
+    
     try {
       const { data } = await createPage({
         variables: {
@@ -73,12 +78,34 @@ const PagesSection = () => {
       });
       
       if(data?.createPage){
-        alert('Page created successfully');
+        toast.success('Page created successfully! 🎉', {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        // Reset form
+        setPageForm({ name: '', category: '', description: '' });
+        setCoverImage(null);
+        setProfileImage(null);
+        setCoverPreview('');
+        setProfilePreview('');
       }
       setIsCreateModalOpen(false);
     } catch (error) {
-      alert('Error creating page:', error);
+      toast.error('Error creating page. Please try again.', {
+        position: "top-right",
+        autoClose: 4000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
       console.log(error);
+    } finally {
+      setIsCreatingPage(false); // Stop loading
     }
   };
 
@@ -114,7 +141,7 @@ const PagesSection = () => {
     e.stopPropagation();
     
     if (!token) {
-      alert('Please log in to like pages');
+      toast.error('Please log in to like pages');
       return;
     }
 
@@ -171,7 +198,7 @@ const PagesSection = () => {
         prev.filter(p => p.id !== page.id)
       );
       
-      alert('Failed to like the page. Please try again.');
+      toast.error('Failed to like the page. Please try again.');
     }
   };
 
@@ -218,11 +245,12 @@ const PagesSection = () => {
         category: page.category,
         description: page.description,
         likes: '0', // Default likes count
-        coverPhoto: page.coverImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80', // Default cover photo
-        profilePhoto: page.profileImage || 'https://randomuser.me/api/portraits/tech/1.jpg', // Default profile photo
+        coverPhoto: page.coverImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
+        profilePhoto: page.createdBy?.profileImage || page.profileImage || 'https://via.placeholder.com/150?text=User',
         isLiked: false,
         isYours: false,
-        createdAt: page.createdAt || new Date().toISOString()
+        createdAt: page.createdAt || new Date().toISOString(),
+        createdBy: page.createdBy
       }));
       
       setSuggestedPages(formattedPages);
@@ -255,10 +283,11 @@ const PagesSection = () => {
         description: page.description,
         likes: '0', // Default likes count
         coverPhoto: page.coverImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        profilePhoto: page.profileImage || 'https://randomuser.me/api/portraits/tech/1.jpg',
+        profilePhoto: page.createdBy?.profileImage || page.profileImage || 'https://via.placeholder.com/150?text=User',
         isLiked: false,
         isYours: true, // These are user's own pages
-        createdAt: page.createdAt || new Date().toISOString()
+        createdAt: page.createdAt || new Date().toISOString(),
+        createdBy: page.createdBy
       }));
       
       setYourPages(formattedPages);
@@ -291,10 +320,11 @@ const PagesSection = () => {
         description: page.description,
         likes: '0', // Default likes count
         coverPhoto: page.coverImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        profilePhoto: page.profileImage || 'https://randomuser.me/api/portraits/tech/1.jpg',
+        profilePhoto: page.createdBy?.profileImage || page.profileImage || 'https://via.placeholder.com/150?text=User',
         isLiked: true, // These are liked pages
         isYours: false,
-        createdAt: page.createdAt || new Date().toISOString()
+        createdAt: page.createdAt || new Date().toISOString(),
+        createdBy: page.createdBy
       }));
       
       setLikedPages(formattedLikedPages);
@@ -636,15 +666,22 @@ const PagesSection = () => {
                 Cancel
               </button>
               <button 
-                className={`px-4 py-2 rounded-md font-medium text-white ${
-                  !pageForm.name || !pageForm.category 
+                className={`px-4 py-2 rounded-md font-medium text-white flex items-center justify-center gap-2 ${
+                  !pageForm.name || !pageForm.category || isCreatingPage
                     ? 'bg-blue-300 cursor-not-allowed' 
                     : 'bg-blue-600 hover:bg-blue-700'
                 }`}
                 onClick={handleCreatePage}
-                disabled={!pageForm.name || !pageForm.category}
+                disabled={!pageForm.name || !pageForm.category || isCreatingPage}
               >
-                Create Page
+                {isCreatingPage ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Creating...
+                  </>
+                ) : (
+                  'Create Page'
+                )}
               </button>
             </div>
           </div>

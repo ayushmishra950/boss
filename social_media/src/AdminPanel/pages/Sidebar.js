@@ -4,6 +4,7 @@ import {
   Users,
   FileText,
   Database,
+  File,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -29,7 +30,7 @@ export default function Sidebar({
     { 
       icon: FileText, 
       label: "Admin Management", 
-      active: ["Manage Reels", "Manage Videos/Posts", "Admin Management"].includes(currentPage),
+      active: ["Manage Reels", "Pages", "Admin Management"].includes(currentPage),
       onClick: () => setCurrentPage("Admin Management")
     },
   ]
@@ -123,16 +124,16 @@ export default function Sidebar({
                           <li>
                             <button
                               onClick={() => {
-                                setCurrentPage("Manage Videos/Posts")
+                                setCurrentPage("Pages")
                                 setIsSidebarOpen(false)
                               }}
                               className={`flex items-center justify-between w-full space-x-3 px-3 py-2 rounded-lg transition-colors duration-200 cursor-pointer ${
-                                currentPage === "Manage Videos/Posts" ? "bg-[#B65FCF] text-white" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                currentPage === "Pages" ? "bg-[#B65FCF] text-white" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                               }`}
                             >
                               <div className="flex items-center space-x-3">
-                                <Database size={20} className="flex-shrink-0" />
-                                <span className="font-medium">Videos/Posts</span>
+                                <File size={20} className="flex-shrink-0" />
+                                <span className="font-medium">Pages</span>
                               </div>
                             </button>
                           </li>

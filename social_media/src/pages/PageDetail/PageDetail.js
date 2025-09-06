@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaThumbsUp, FaShare, FaArrowLeft, FaGlobe, FaCalendarAlt, FaMapMarkerAlt, FaEllipsisV, FaCheck, FaTimes, FaImage, FaVideo } from 'react-icons/fa';
+import { FaThumbsUp, FaShare, FaArrowLeft, FaGlobe, FaCalendarAlt, FaMapMarkerAlt, FaEllipsisV, FaCheck, FaTimes, FaImage, FaVideo, FaSpinner } from 'react-icons/fa';
 import { BsGrid3X3 } from 'react-icons/bs';
 import PostCard from '../../components/postCard/PostCard';
 import { useQuery,useMutation } from '@apollo/client';
-import { GET_PAGE_BY_ID, CREATE_PAGE_POST, GET_PAGE_POSTS } from '../../graphql/mutations';
+import { GET_PAGE_BY_ID, CREATE_PAGE_POST, GET_PAGE_POSTS, GET_ME } from '../../graphql/mutations';
+import { toast } from 'react-toastify';
 import './PageDetail.css';
-
 
 const PageDetail = () => {
   const { pageId } = useParams();
@@ -20,6 +20,7 @@ const PageDetail = () => {
   const [postCaption, setPostCaption] = useState('');
     const [image, setImage] = useState(null);
     const [video, setVideo] = useState(null);
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
 
   // GraphQL query to fetch page by ID
   const { data: pageData, loading: pageLoading, error: pageError } = useQuery(GET_PAGE_BY_ID, {
@@ -34,6 +35,13 @@ const PageDetail = () => {
   });
   const [posts, setPosts] = useState([]);
   const [createPagePost,{error}] = useMutation(CREATE_PAGE_POST)
+  
+  // Get current user data for profile photo
+  const { data: currentUserData, loading: userLoading } = useQuery(GET_ME, {
+    fetchPolicy: 'cache-first'
+  });
+  
+  const currentUser = currentUserData?.getMe;
 
 
     const handleFileChange = (event) => {
@@ -80,6 +88,8 @@ const PageDetail = () => {
     const handleCreatePost = async () => {
       console.log('Debug values:', { pageId, image, video, postCaption });
       if (!pageId || !postCaption.trim() || (!image && !video)) return;
+      
+      setIsCreatingPost(true);
       try {
         const response = await createPagePost({
           variables: {  
@@ -95,8 +105,8 @@ const PageDetail = () => {
         // Transform the GraphQL response to match PostCard expected format
         const transformedPost = {
           id: newPost.id,
-          userAvatar: newPost.actualUser?.profileImage || 'https://via.placeholder.com/40',
-          username: newPost.actualUser?.name || newPost.actualUser?.username || 'User',
+          userAvatar: currentUser?.profileImage || newPost.actualUser?.profileImage || 'https://via.placeholder.com/40',
+          username: currentUser?.name || currentUser?.username || newPost.actualUser?.name || newPost.actualUser?.username || 'User',
           timeAgo: 'Just now',
           caption: newPost.caption,
           media: newPost.imageUrl || newPost.videoUrl,
@@ -110,6 +120,20 @@ const PageDetail = () => {
         setSelectedMedia(null);
         setMediaType(null);
         setPostCaption('');
+        setImage(null);
+        setVideo(null);
+        
+        // Trigger event to refresh posts in main feed
+        window.dispatchEvent(new Event("postUploaded"));
+        
+        toast.success('Post uploaded successfully! 🎉', {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
       } catch (err) {
         console.error('Error creating post:', err);
         console.error('GraphQL errors:', err.graphQLErrors);
@@ -120,7 +144,18 @@ const PageDetail = () => {
             console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`)
           );
         }
-      } 
+        
+        toast.error('Failed to create post. Please try again.', {
+          position: "top-right",
+          autoClose: 4000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+      } finally {
+        setIsCreatingPost(false);
+      }
     };
  
 
@@ -150,7 +185,8 @@ const PageDetail = () => {
         profilePhoto: graphqlPage.profileImage || 'https://randomuser.me/api/portraits/tech/1.jpg',
         isLiked: false,
         isYours: false,
-        createdAt: graphqlPage.createdAt || new Date().toISOString()
+        createdAt: graphqlPage.createdAt || new Date().toISOString(),
+        createdBy: graphqlPage.createdBy
       };
       
       setPage(formattedPage);
@@ -171,8 +207,8 @@ const PageDetail = () => {
       const graphqlPosts = pagePostsData.getPagePosts;
       const formattedPosts = graphqlPosts.map(post => ({
         id: post.id,
-        userAvatar: post.actualUser?.profileImage || 'https://via.placeholder.com/40',
-        username: post.actualUser?.name || post.actualUser?.username || 'User',
+        userAvatar: post.actualUser?.profileImage || currentUser?.profileImage || 'https://via.placeholder.com/40',
+        username: post.actualUser?.name || post.actualUser?.username || currentUser?.name || currentUser?.username || 'User',
         timeAgo: 'Just now',
         caption: post.caption,
         media: post.videoUrl || post.imageUrl,
@@ -230,8 +266,8 @@ const PageDetail = () => {
     
     const newPost = {
       id: Date.now(),
-      userAvatar: 'https://randomuser.me/api/portraits/men/3.jpg', // Default avatar
-      username: 'Current User',
+      userAvatar: currentUser?.profileImage || 'https://randomuser.me/api/portraits/men/3.jpg',
+      username: currentUser?.name || currentUser?.username || 'Current User',
       timeAgo: 'Just now',
       media: selectedMedia,
       type: mediaType,
@@ -264,7 +300,7 @@ const PageDetail = () => {
     setPostCaption('');
   };
 
-  if (isLoading || pageLoading || pagePostsLoading) {
+  if (isLoading || pageLoading || pagePostsLoading || userLoading) {
     return <div className="page-detail-loading">Loading...</div>;
   }
 
@@ -342,35 +378,37 @@ const PageDetail = () => {
             </div>
           )}
           
-          {/* Post Buttons */}
-          <div className="post-buttons">
-            <button 
-              className="post-button photo-post" 
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.onchange = handleFileChange;
-                input.click();
-              }}
-            >
-              <FaImage className="button-icon" />
-              <span>Photo</span>
-            </button>
-            <button 
-              className="post-button video-post" 
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'video/*';
-                input.onchange = handleFileChange;
-                input.click();
-              }}
-            >
-              <FaVideo className="button-icon" />
-              <span>Video</span>
-            </button>
-          </div>
+          {/* Post Buttons - Only show for page owner */}
+          {currentUser && page?.createdBy && currentUser.id === page.createdBy.id && (
+            <div className="post-buttons">
+              <button 
+                className="post-button photo-post" 
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.onchange = handleFileChange;
+                  input.click();
+                }}
+              >
+                <FaImage className="button-icon" />
+                <span>Photo</span>
+              </button>
+              <button 
+                className="post-button video-post" 
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'video/*';
+                  input.onchange = handleFileChange;
+                  input.click();
+                }}
+              >
+                <FaVideo className="button-icon" />
+                <span>Video</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -458,8 +496,19 @@ const PageDetail = () => {
               <button className="cancel-button" onClick={() => setIsPostModalOpen(false)}>
                 Cancel
               </button>
-              <button className="post-button" onClick={handleCreatePost}>
-                Post
+              <button 
+                className="post-button" 
+                onClick={handleCreatePost}
+                disabled={isCreatingPost || !postCaption.trim() || (!image && !video)}
+              >
+                {isCreatingPost ? (
+                  <>
+                    <FaSpinner className="animate-spin mr-2" />
+                    Posting...
+                  </>
+                ) : (
+                  'Post'
+                )}
               </button>
             </div>
           </div>
