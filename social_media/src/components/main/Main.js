@@ -34,6 +34,39 @@ const Main = () => {
       console.error('GraphQL Error:', error);
     }
   });  
+ const defaultLat = 75.8574194;
+const defaultLon = 25.1737019;
+  
+console.log("User location set to default Jaipur coordinates.", data);
+
+    useEffect(() => {
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      // 👇 Current lat/lon le raha hai
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      // 👇 GraphQL query me bhej raha hai
+      setAllPosts({
+        variables: {
+          userId: tokens?.id,
+          userLocation: { lat, lon }
+        }
+      });
+    },
+    (err) => {
+      console.error("Location error:", err.message);
+
+      // 👇 Agar location allow nahi hui to fallback location
+      setAllPosts({
+        variables: {
+          userId: tokens?.id,
+          userLocation: { lat: defaultLat, lon: defaultLon }
+        }
+      });
+    }
+  );
+}, []);
 
   const scrollStories = (direction) => {
     try {

@@ -13,6 +13,7 @@ const Notification = require('../Models/Notification');
 const ActivityLog = require('../Models/ActivityLog');
 const FollowRequest = require('../Models/FollowRequest');
 const { uploadToCloudinary } = require('../Utils/cloudinary');
+const { geocodeLocation } = require('../Location/location');
 
 const otpStore = {};
 
@@ -24,10 +25,54 @@ setInterval(() => {
   });
 }, 5 * 60 * 1000);
 
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c; // Distance in kilometers
+  return distance;
+};
+
 const resolvers = {
   Upload: GraphQLUpload,
 
   Query: {
+//     getLocation: async (_, { latitude, longitude }) => {
+//       const result = await getCityState(latitude, longitude);
+//       return result; // { city, state }
+//     },
+
+getPagePostsByUser: async (_, { pageId }) => {
+  if (!pageId) throw new Error("Page ID is required");
+
+  try {
+    const posts = await PageByUser.find({ createdBy: pageId })
+      .sort({ createdAt: -1 })
+      .populate("createdBy"); // 👈 populate karo createdBy ko
+
+    // ObjectId ko string me convert karo
+    const fixedPosts = posts.map(post => {
+      const postObj = post.toObject();
+
+      if (postObj.createdBy && postObj.createdBy._id) {
+        postObj.createdBy.id = postObj.createdBy._id.toString(); // 👈 ye line zaroori hai
+      }
+
+      return postObj;
+    });
+
+    return fixedPosts;
+
+  } catch (error) {
+    console.error("Error fetching posts:", error);
+    throw new Error("Failed to fetch page posts");
+  }
+},
     getSuggestedPages: async () => {
       try {
         return await Page.find().populate("createdBy likedBy");
@@ -220,10 +265,7 @@ mySelf: async (_, { userId }, { dataSources }) => {
             .populate('followers')
             .populate('following');
           
-          console.log(`🔍 getMe for user ${currentUser.name}:`);
-          console.log(`👥 Following count: ${currentUser.following?.length || 0}`);
-          console.log(`👥 Following users:`, currentUser.following?.map(f => ({ id: f._id, name: f.name })) || []);
-          
+     
           return currentUser;
         } catch(error) {
           console.log('Error in getMe:', error);
@@ -255,35 +297,66 @@ mySelf: async (_, { userId }, { dataSources }) => {
         }
       
       },
-  
-  
-   getAllPosts: async (_, { userId }) => {
+
+
+getAllPosts: async (_, { userId, userLocation }) => {
+  console.log('getAllPosts called with userId:', userId, 'and userLocation:', userLocation);
   try {
-    // Get current user to fetch their following list
+    const [lon, lat] = userLocation?.coordinates;
+
     const currentUser = await User.findById(userId).populate('following');
     if (!currentUser) throw new Error("User not found");
 
-    // Get list of user IDs to fetch posts from (user + following)
     const followingIds = currentUser.following.map(user => user._id);
     const userIdsToFetch = [userId, ...followingIds];
 
-    // Fetch posts from user and their following
-    const posts = await Post.find({ createdBy: { $in: userIdsToFetch } })
-  .sort({ createdAt: -1 })
-  // .limit(1)
-  .populate("createdBy", "id name username profileImage")
-  .populate("likes.user", "id name username profileImage")
-  .populate("comments.user", "id name username profileImage")
-  .populate("comments.likes.user", "id name username profileImage")
-  .populate("comments.replies.user", "id name username profileImage")
-  .populate("comments.replies.likes.user", "id name username profileImage");
+    const maxDistance = 10000; // 10 km
 
+    // 🔹 Fetch posts from following users
+    const followingPosts = await Post.find({
+      createdBy: { $in: userIdsToFetch }
+    })
+    .sort({ createdAt: -1 })
+    .populate("createdBy", "id name username profileImage")
+    .populate("likes.user", "id name username profileImage")
+    .populate("comments.user", "id name username profileImage")
+    .populate("comments.likes.user", "id name username profileImage")
+    .populate("comments.replies.user", "id name username profileImage")
+    .populate("comments.replies.likes.user", "id name username profileImage");
 
-    // ✅ Add isVideo flag to posts based on whether they have videoUrl
+    // 🔹 Fetch nearby posts
+    const nearbyPosts = await Post.find({
+      location: {
+        $near: {
+          $geometry: {
+            type: "Point",
+            coordinates: [lon, lat],
+          },
+          $maxDistance: maxDistance,
+        }
+      }
+    })
+    .sort({ createdAt: -1 })
+    .populate("createdBy", "id name username profileImage")
+    .populate("likes.user", "id name username profileImage")
+    .populate("comments.user", "id name username profileImage")
+    .populate("comments.likes.user", "id name username profileImage")
+    .populate("comments.replies.user", "id name username profileImage")
+    .populate("comments.replies.likes.user", "id name username profileImage");
+
+    // 🔹 Combine and remove duplicates
+    const combined = [...followingPosts, ...nearbyPosts];
+    const uniquePostsMap = new Map();
+    combined.forEach(post => {
+      uniquePostsMap.set(post._id.toString(), post);
+    });
+
+    const posts = Array.from(uniquePostsMap.values());
+
     const postsWithFlag = posts.map(post => ({
       ...post._doc,
       id: post._id,
-      isVideo: !!post.videoUrl // true if post has video, false otherwise
+      isVideo: !!post.videoUrl
     }));
 
     return postsWithFlag;
@@ -620,29 +693,6 @@ searchUsers: async (_, { username, userId }) => {
   }
 },
 
-    getPageById: async (_, { pageId }) => {
-      try {
-        const page = await Page.findById(pageId).populate("createdBy likedBy");
-        if (!page) throw new Error("Page not found");
-        return page;
-      } catch (error) {
-        throw new Error(error.message || "Error fetching page");
-      }
-    },
-
-    getPagePosts: async (_, { pageId }) => {
-      try {
-        const posts = await PageByUser.find({ createdBy: pageId })
-          .populate("createdBy")
-          .populate("actualUser")
-          .sort({ createdAt: -1 });
-        return posts;
-      } catch (error) {
-        console.error("Error fetching page posts:", error);
-        throw new Error("Failed to fetch page posts");
-      }
-    },
-
     // Activity logs resolver
     activityLogs: async (_, { userId }) => {
       try {
@@ -977,112 +1027,106 @@ unblock: async (_, { targetUserId, userId }) => {
   return "User unblocked successfully";
 },
 
-createPagePost: async (_, { caption, image, video, pageId }, context) => {
+createPagePost: async (_, { caption, image, video, pageId }) => {
   if(!pageId) throw new Error("Page ID is required");
-  
-  // Get current user from context (optional for now)
-  const currentUser = context?.user;
-  console.log('Context user:', currentUser);
-  
       try {
-        console.log('Creating page post with:', { pageId, caption, hasImage: !!image, hasVideo: !!video, userId: currentUser?.id });
-        
         // ✅ Upload image if exists
         let imageUrl = null;
         if (image) {
-          console.log('Uploading image to Cloudinary...');
           imageUrl = await uploadToCloudinary(image, 'image');
-          console.log('Image uploaded:', imageUrl);
         }
 
         // ✅ Upload video if exists
         let videoUrl = null;
         if (video) {
-          console.log('Uploading video to Cloudinary...');
-          const videoResult = await uploadToCloudinary(video, 'video');
-          console.log('Video uploaded:', videoResult);
-          
-          // Extract URL from video result object
-          videoUrl = typeof videoResult === 'object' ? videoResult.url : videoResult;
+          videoUrl = await uploadToCloudinary(video, 'video');
         }
 
-        // ✅ Create post document with optional actualUser
-        const postData = {
+        // ✅ Upload thumbnail if exists
+        let thumbnailUrl = null;
+        if (thumbnail) {
+          thumbnailUrl = await uploadToCloudinary(thumbnail, 'image');
+        }
+
+        // ✅ Create post document
+        const newPost = new PageByUser({
           caption,
           imageUrl,
           videoUrl,
+          thumbnailUrl,
           createdBy: pageId,
-        };
-        
-        // Only add actualUser if we have a valid user
-        if (currentUser?.id) {
-          postData.actualUser = currentUser.id;
-        }
+        });
 
-        const newPost = new PageByUser(postData);
-
-       console.log('Saving post to database...');
        const savedPost = await newPost.save();
-       console.log('Post saved successfully:', savedPost._id);
        
-       // Populate fields that exist
-       const populateFields = ["createdBy"];
-       if (savedPost.actualUser) {
-         populateFields.push("actualUser");
-       }
-       
-       await savedPost.populate(populateFields.join(" "));
+       await savedPost.populate("createdBy");
 
-        return {
-          ...savedPost._doc,
-          id: savedPost._id,
-          actualUser: savedPost.actualUser || null
-        };
+        return savedPost;
       } catch (error) {
         console.error("Error creating page post:", error);
-        console.error("Error stack:", error.stack);
-        throw new Error(`Failed to create page post: ${error.message}`);
+        throw new Error("Failed to create page post");
       }
     },
 
+    createPost: async (_, { id, caption, image, video, thumbnail, locationName }) => {
+  let imageUrl = null;
+  let videoUrl = null;
+  let thumbnailUrl = null;
+  let location = undefined;
 
-    createPost: async (_, { id, caption, image, video, thumbnail }) => {
-      let imageUrl = null;
-      let videoUrl = null;
-      let thumbnailUrl = null;
-      
-      if (image) {
-        imageUrl = await uploadToCloudinary(image, 'image');
-      }
+  // ✅ Geocode locationName to coordinates
+  if (locationName) {
+    try {
+      const coords = await geocodeLocation(locationName); // await is necessary
+      location = {
+        type: 'Point',
+        coordinates: [coords.lon, coords.lat], // [longitude, latitude]
+      };
+    } catch (error) {
+      console.warn("Location not found or geocoding failed:", error.message);
+    }
+  }
 
-      if (video) {
-        if (video.size > 300 * 1024 * 1024) {
-          throw new Error("Video should be under 300MB");
-        }
-        const videoResponse = await uploadToCloudinary(video, 'video');
-        // Extract just the URL from the response object
-        videoUrl = videoResponse.url;
-      }
+  // ✅ Upload image
+  if (image) {
+    imageUrl = await uploadToCloudinary(image, 'image');
+  }
 
-      // Handle thumbnail for video posts
-      if (thumbnail) {
-        thumbnailUrl = await uploadToCloudinary(thumbnail, 'image');
-      }
+  // ✅ Upload video
+  if (video) {
+    if (video.size > 300 * 1024 * 1024) {
+      throw new Error("Video should be under 300MB");
+    }
+    const videoResponse = await uploadToCloudinary(video, 'video');
+    videoUrl = videoResponse.url;
+  }
 
-      if (!imageUrl && !videoUrl) {
-        throw new Error('Either image or video must be provided');
-      }
-      
-      const post = await Post.create({ 
-        caption, 
-        imageUrl, 
-        videoUrl, 
-        thumbnailUrl, 
-        createdBy: id 
-      });
-      await User.findByIdAndUpdate(id, { $push: { posts: post._id } });
-      return post;
-    },
+  // ✅ Upload thumbnail
+  if (thumbnail) {
+    thumbnailUrl = await uploadToCloudinary(thumbnail, 'image');
+  }
+
+  // ✅ At least one media required
+  // if (!imageUrl && !videoUrl) {
+  //   throw new Error('Either image or video must be provided');
+  // }
+
+  // ✅ Create the post
+  const post = await Post.create({
+    caption,
+    imageUrl,
+    videoUrl,
+    thumbnailUrl,
+    locationName: locationName || null,
+    location: location || undefined,
+    createdBy: id,
+  });
+
+  // ✅ Add post to user's post list
+  await User.findByIdAndUpdate(id, { $push: { posts: post._id } });
+
+  return post;
+},
 
    // 📌 Save Post Resolver
 savePost: async (_, { userId, postId }) => {
@@ -1552,7 +1596,10 @@ if (deletePost) {
 
   try {
     const post = await Post.findById(postId).populate('createdBy', 'id name username');
-    if (!post) throw new Error("Post not found");
+
+    if (!post) {
+      throw new Error("Post not found");
+    }
 
     const alreadyLiked = post.likes.some(like => like.user.toString() === userId);
 
@@ -1560,10 +1607,9 @@ if (deletePost) {
     // user unlike kar rha hai
       post.likes = post.likes.filter(like => like.user.toString() !== userId);
     } else {
-      // Like the post
       post.likes.push({ user: userId, likedAt: new Date() });
       
-      // Create notification for post owner (if not liking own post)
+      // 🔔 Create notification for post owner (if not liking own post)
       if (post.createdBy._id.toString() !== userId) {
         try {
           const notification = new Notification({
@@ -1692,6 +1738,8 @@ if (deletePost) {
           const io = context.req?.app?.get('io');
           if (io) {
             const recipientId = id.toString();
+            console.log('🚀 Emitting follow notification to user:', recipientId);
+            
             io.to(recipientId).emit('newNotification', {
               id: populatedNotification._id.toString(),
               type: 'follow',
@@ -1780,9 +1828,7 @@ if (deletePost) {
                 .populate('sender', 'id name username profileImage')
                 .populate('post', 'id caption imageUrl videoUrl');
 
-              console.log('🔔 Comment like notification created:', populatedNotification);
-
-              // 🚀 EMIT REAL-TIME NOTIFICATION
+              // Emit real-time notification
               const io = context.req?.app?.get('io');
               if (io) {
                 const recipientId = comment.user.toString();
@@ -1802,10 +1848,6 @@ if (deletePost) {
                   createdAt: populatedNotification.createdAt.toISOString(),
                   isRead: false
                 });
-                
-                console.log('✅ Comment like notification emitted successfully');
-              } else {
-                console.log('❌ Socket.io not available for comment like notification');
               }
               
               // Increment unread count for recipient

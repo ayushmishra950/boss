@@ -8,14 +8,27 @@ const postSchema = new mongoose.Schema({
   },
   imageUrl: {
     type: String,
-    
   },
   videoUrl: {
     type: String,
-   
   },
   thumbnailUrl: {
     type: String,
+  },
+  locationName: {
+    type: String,  // e.g., "Goa, India"
+    default: null,
+  },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+    },
+    coordinates: {
+      type: [Number],  // [longitude, latitude]
+      default: undefined,
+    },
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -34,7 +47,7 @@ const postSchema = new mongoose.Schema({
   // ✅ Likes with timestamp
   likes: [
     {
-      _id: false, // Disable automatic _id generation for likes
+      _id: false,
       user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       likedAt: { type: Date, default: Date.now },
     }
@@ -47,7 +60,7 @@ const postSchema = new mongoose.Schema({
       user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       text: { type: String, required: true },
       commentedAt: { type: Date, default: Date.now },
-      
+
       // Likes for comments
       likes: [
         {
@@ -56,7 +69,7 @@ const postSchema = new mongoose.Schema({
           likedAt: { type: Date, default: Date.now },
         }
       ],
-      
+
       // Replies to comments
       replies: [
         {
@@ -64,7 +77,7 @@ const postSchema = new mongoose.Schema({
           user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
           text: { type: String, required: true },
           repliedAt: { type: Date, default: Date.now },
-          
+
           // Likes for replies
           likes: [
             {
@@ -79,8 +92,5 @@ const postSchema = new mongoose.Schema({
   ],
 });
 
-// module.exports = mongoose.model("Post", postSchema);
-
-
+// ✅ Export safely (for hot-reloading environments)
 module.exports = mongoose.models.Post || mongoose.model("Post", postSchema);
-

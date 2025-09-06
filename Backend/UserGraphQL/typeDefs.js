@@ -34,7 +34,7 @@ const typeDefs = gql`
     hiddenFromStory: [User]
     is_blocked: Boolean
 
-    # Pages Integration
+    # ✅ Pages Integration
     createdPages: [Page]
     likedPages: [Page]
   }
@@ -84,7 +84,6 @@ const typeDefs = gql`
     videoUrl: String
     thumbnailUrl: String
     createdBy: Page
-    actualUser: User
     createdAt: String
     isArchived: Boolean
     likes: [PageLike]
@@ -157,6 +156,8 @@ const typeDefs = gql`
     caption: String
     imageUrl: String
     videoUrl: String
+    locationName: String
+    location: GeoPoint
     thumbnailUrl: String
     isVideo: Boolean
     createdBy: User
@@ -165,6 +166,11 @@ const typeDefs = gql`
     likes: [Like]
     comments: [Comment]
   }
+    type GeoPoint {
+  type: String        # e.g., "Point"
+  coordinates: [Float] # [longitude, latitude]
+}
+
 
   type Like {
     user: User
@@ -226,6 +232,17 @@ const typeDefs = gql`
     updatedAt: String
   }
 
+  type Location {
+    city: String
+    state: String
+  }
+
+  input LocationInput {
+  type: String!
+  coordinates: [Float!]!
+}
+
+
   ##########################
   ######### QUERIES ########
   ##########################
@@ -243,7 +260,10 @@ const typeDefs = gql`
     getCommentedVideoPostsByUser(userId: ID!): [Post!]!
     getMe: User
     getUserBlockList(userId: ID): User
-    getAllPosts(userId: ID): [Post]
+    
+   ##getAllPosts(userId: ID): [Post]##
+    getAllPosts(userId: ID!, userLocation: LocationInput): [Post]
+
     getUserOwnPosts(userId: ID!): [Post]
     getUserFollowing(userId: ID!): [UserBasic]
     getFollowers(userId: ID): [User!]!
@@ -261,13 +281,12 @@ const typeDefs = gql`
     getSavedStory(id: ID!): Story
     activityLogs(userId: ID!): [ActivityLog]
 
-    # Pages Feature Queries
+    # ✅ Pages Feature Queries
     getSuggestedPages: [Page!]!
     getLikedPages(userId: ID!): [Page!]!
     getUserPages(userId: ID!): [Page!]!
-    getPageById(pageId: ID!): Page
 
-    # PageByUser Queries (optional)
+    # ✅ PageByUser Queries (optional)
     getPagePostsByUser(pageId: ID!): [PageByUser]
     getSinglePagePost(postId: ID!): PageByUser
   }
@@ -293,7 +312,7 @@ const typeDefs = gql`
     newPassword(email: String!, newPassword: String!): String
     updateUserPrivacy(userId: ID!, isPrivate: Boolean!): String
 
-    createPost(id: ID, caption: String!, image: Upload, video: Upload, thumbnail: Upload): Post
+    createPost(id: ID, caption: String!, locationName: String, image: Upload, video: Upload, thumbnail: Upload): Post
     DeletePost(id: ID!): String
     LikePost(userId: ID!, postId: ID!): String!
     CommentPost(userId: ID!, postId: ID!, text: String!): [Comment]!
@@ -331,11 +350,11 @@ const typeDefs = gql`
     DeleteReply(userId: ID!, postId: ID!, commentId: ID!, replyId: ID!): Comment
     LikeReply(userId: ID!, postId: ID!, commentId: ID!, replyId: ID!): String
 
-    # Pages Feature Mutations
+    # ✅ Pages Feature Mutations
     createPage(title: String!, profileImage: Upload, coverImage: Upload, category: String!, description: String, userId: ID!): Page
     likePage(userId: ID!, pageId: ID!): String
 
-    # PageByUser Mutations
+    # ✅ PageByUser Mutations
     createPagePost(caption: String!, image: Upload, video: Upload, thumbnail: Upload, pageId: ID!): PageByUser
    
   }

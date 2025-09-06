@@ -231,6 +231,7 @@ const FooterNav = () => {
   };
 
   const handlePostSubmit = async (e) => {
+    const locationName = "jaipur india";
     e.preventDefault();
     if (!user.id || !caption || (!image && !video)) return;
     /* console.log(...) */ void 0;
@@ -243,6 +244,7 @@ const FooterNav = () => {
           caption,
           image,
           video,
+          locationName : locationName || null,
         },
       });
       setIsUploading(false);

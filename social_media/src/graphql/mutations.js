@@ -623,8 +623,22 @@ export const GET_USER_COMMENTED_REELS = gql`
 `;
 
 export const CREATE_POST = gql`
-  mutation($id: ID!,$caption: String!, $image: Upload, $video: Upload, $thumbnail: Upload) {
-    createPost(id: $id,caption: $caption, image: $image, video: $video, thumbnail: $thumbnail) {
+  mutation(
+    $id: ID!
+    $caption: String!
+    $image: Upload
+    $video: Upload
+    $thumbnail: Upload
+    $locationName: String
+  ) {
+    createPost(
+      id: $id
+      caption: $caption
+      image: $image
+      video: $video
+      thumbnail: $thumbnail
+      locationName: $locationName
+    ) {
       id
       caption
       imageUrl
@@ -635,6 +649,7 @@ export const CREATE_POST = gql`
     }
   }
 `;
+
 export const DELETE_POST_BY_ADMIN = gql`
   mutation DeletePostByAdmin($id: ID!, $type: String!) { 
   DeletePostByAdmin(id: $id,type:$type)
@@ -643,13 +658,18 @@ export const DELETE_POST_BY_ADMIN = gql`
 
 
 export const GET_ALL_POSTS = gql`
-  query getAllPosts($userId: ID!) {
-    getAllPosts(userId: $userId) {
+  query getAllPosts($userId: ID!, $userLocation: LocationInput) {
+    getAllPosts(userId: $userId, userLocation: $userLocation) {
       id
       caption
       imageUrl
       videoUrl
       thumbnailUrl
+      locationName
+      location {
+        type
+        coordinates
+      }
       isVideo
       createdBy {
         id
