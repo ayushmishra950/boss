@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaThumbsUp, FaShare, FaArrowLeft, FaGlobe, FaCalendarAlt, FaMapMarkerAlt, FaEllipsisV, FaCheck, FaTimes, FaImage, FaVideo, FaSpinner } from 'react-icons/fa';
+import { FaThumbsUp, FaShare, FaArrowLeft, FaGlobe, FaCalendarAlt, FaMapMarkerAlt, FaEllipsisV, FaCheck, FaTimes, FaImage, FaVideo, FaSpinner, FaTrash } from 'react-icons/fa';
 import { BsGrid3X3 } from 'react-icons/bs';
 import PostCard from '../../components/postCard/PostCard';
 import { useQuery,useMutation } from '@apollo/client';
-import { GET_PAGE_BY_ID, CREATE_PAGE_POST, GET_PAGE_POSTS, GET_ME } from '../../graphql/mutations';
+import { GET_PAGE_BY_ID, CREATE_PAGE_POST, GET_PAGE_POSTS, GET_ME ,DELETE_PAGE,GET_ALL_PAGES} from '../../graphql/mutations';
 import { toast } from 'react-toastify';
 import './PageDetail.css';
+import {GetTokenFromCookie} from "../../components/getToken/GetToken"
+
 
 const PageDetail = () => {
   const { pageId } = useParams();
@@ -21,13 +23,44 @@ const PageDetail = () => {
     const [image, setImage] = useState(null);
     const [video, setVideo] = useState(null);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [token,setToken] = useState();
 
-  // GraphQL query to fetch page by ID
-  const { data: pageData, loading: pageLoading, error: pageError } = useQuery(GET_PAGE_BY_ID, {
-    variables: { pageId },
-    skip: !pageId,
-    fetchPolicy: 'cache-first'
-  });
+  const [deletePage] = useMutation(DELETE_PAGE);
+  const { data: allPagesData, loading: allPagesLoading } = useQuery(GET_ALL_PAGES);
+
+  useEffect(() => {
+      const tokens = GetTokenFromCookie();
+      if (tokens?.id) {
+        setToken(tokens);
+      }
+    }, []);
+
+  const handleDeletePage = async () => {
+    if (!pageId || !token?.id) return;
+    console.log('Attempting to delete page with ID:', pageId,token?.id);
+    setIsDropdownOpen(false); // Close dropdown
+    const confirmDelete = window.confirm(`Are you sure you want to delete the page "${page.name}"? This action cannot be undone.`);
+    if (!confirmDelete) return;
+    try {
+      const response = await deletePage({
+        variables: {
+          userId: token?.id,
+          pageId: pageId.toString()
+        }
+      });
+      console.log('Page deleted:', response);
+      
+      toast.success('Page deleted successfully!');
+      navigate('/pages');
+    } catch (err) {
+      console.error('Error deleting page:', err);
+      toast.error('Failed to delete page. Please try again.');
+    }
+  };
+
+
+  // Removed GET_PAGE_BY_ID query since we're using getAllPages
   const { data: pagePostsData, loading: pagePostsLoading, error: pagePostsError } = useQuery(GET_PAGE_POSTS, {
     variables: { pageId },
     skip: !pageId,
@@ -162,45 +195,38 @@ const PageDetail = () => {
   
 
   useEffect(() => {
-    // First try to fetch from localStorage
-    const savedPages = JSON.parse(localStorage.getItem('userPages') || '[]');
-    const foundPage = savedPages.find(p => p.id.toString() === pageId);
-    
-    if (foundPage) {
-      setPage(foundPage);
-      // Check if the page is already liked by the current user
-      const likedPages = JSON.parse(localStorage.getItem('likedPages') || '{}');
-      setIsLiked(!!likedPages[pageId]);
-      setIsLoading(false);
-    } else if (pageData?.getPageById) {
-      // If not found in localStorage, use GraphQL data
-      const graphqlPage = pageData.getPageById;
-      const formattedPage = {
-        id: graphqlPage.id,
-        name: graphqlPage.title,
-        category: graphqlPage.category,
-        description: graphqlPage.description,
-        likes: '0',
-        coverPhoto: graphqlPage.coverImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        profilePhoto: graphqlPage.profileImage || 'https://randomuser.me/api/portraits/tech/1.jpg',
-        isLiked: false,
-        isYours: false,
-        createdAt: graphqlPage.createdAt || new Date().toISOString(),
-        createdBy: graphqlPage.createdBy
-      };
+    // Use getAllPages data to find the matching page
+    if (allPagesData?.getAllPages && pageId) {
+      const foundPage = allPagesData.getAllPages.find(p => p.id.toString() === pageId);
       
-      setPage(formattedPage);
-      
-      // Save to localStorage for future use
-      const updatedPages = [...savedPages, formattedPage];
-      localStorage.setItem('userPages', JSON.stringify(updatedPages));
-      
-      setIsLoading(false);
-    } else if (!pageLoading && !foundPage && !pageData?.getPageById) {
-      // If page not found in both localStorage and GraphQL, redirect
+      if (foundPage) {
+        const formattedPage = {
+          id: foundPage.id,
+          name: foundPage.title || foundPage.name,
+          category: foundPage.category,
+          description: foundPage.description,
+          likes: foundPage.likes?.length?.toString() || '0',
+          coverPhoto: foundPage.coverImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
+          profilePhoto: foundPage.profileImage || 'https://randomuser.me/api/portraits/tech/1.jpg',
+          isLiked: false,
+          isYours: currentUser && foundPage.createdBy && 
+                   currentUser.id.toString() === foundPage.createdBy.id.toString(),
+          createdAt: foundPage.createdAt || new Date().toISOString(),
+          createdBy: foundPage.createdBy
+        };
+        
+        setPage(formattedPage);
+        setIsLiked(false); // Reset like status
+        setIsLoading(false);
+      } else if (!allPagesLoading) {
+        // If page not found and loading is complete, redirect
+        navigate('/pages');
+      }
+    } else if (!allPagesLoading && !pageId) {
+      // If no pageId and loading is complete, redirect
       navigate('/pages');
     }
-  }, [pageId, navigate, pageData, pageLoading]);
+  }, [pageId, navigate, allPagesData, allPagesLoading, currentUser]);
 
   useEffect(() => {
     if (pagePostsData?.getPagePosts) {
@@ -221,29 +247,28 @@ const PageDetail = () => {
     }
   }, [pagePostsData, page]);
 
-  const handleLike = () => {
-    const savedPages = JSON.parse(localStorage.getItem('userPages') || '[]');
-    const updatedPages = savedPages.map(p => {
-      if (p.id.toString() === pageId) {
-        const newLikes = isLiked ? (parseInt(p.likes) - 1).toString() : (parseInt(p.likes) + 1).toString();
-        return { ...p, likes: newLikes };
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isDropdownOpen && !event.target.closest('.dropdown-container')) {
+        setIsDropdownOpen(false);
       }
-      return p;
-    });
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  const handleLike = () => {
+    if (!page) return;
     
-    // Update liked status in localStorage
-    const likedPages = JSON.parse(localStorage.getItem('likedPages') || '{}');
-    if (isLiked) {
-      delete likedPages[pageId];
-    } else {
-      likedPages[pageId] = true;
-    }
+    // Update page likes count
+    const newLikes = isLiked ? (parseInt(page.likes) - 1).toString() : (parseInt(page.likes) + 1).toString();
+    const updatedPage = { ...page, likes: newLikes };
     
-    localStorage.setItem('userPages', JSON.stringify(updatedPages));
-    localStorage.setItem('likedPages', JSON.stringify(likedPages));
-    
-    
-    setPage(updatedPages.find(p => p.id.toString() === pageId));
+    setPage(updatedPage);
     setIsLiked(!isLiked);
   };
 
@@ -279,20 +304,6 @@ const PageDetail = () => {
     // Update posts state
     setPosts([newPost, ...posts]);
     
-    // Save to localStorage
-    const savedPages = JSON.parse(localStorage.getItem('userPages') || '[]');
-    const updatedPages = savedPages.map(p => {
-      if (p.id.toString() === pageId) {
-        return {
-          ...p,
-          posts: [newPost, ...(p.posts || [])]
-        };
-      }
-      return p;
-    });
-    
-    localStorage.setItem('userPages', JSON.stringify(updatedPages));
-    
     // Reset form
     setIsPostModalOpen(false);
     setSelectedMedia(null);
@@ -300,7 +311,7 @@ const PageDetail = () => {
     setPostCaption('');
   };
 
-  if (isLoading || pageLoading || pagePostsLoading || userLoading) {
+  if (isLoading || allPagesLoading || pagePostsLoading || userLoading) {
     return <div className="page-detail-loading">Loading...</div>;
   }
 
@@ -354,9 +365,31 @@ const PageDetail = () => {
             <button className="action-button">
               <FaShare /> Share
             </button>
-            <button className="action-button more-options">
-              <FaEllipsisV />
-            </button>
+            <div className="dropdown-container">
+              <button 
+                className="action-button more-options"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <FaEllipsisV />
+              </button>
+              {isDropdownOpen && (
+                <div className="dropdown-menu">
+                  {/* Only show delete option for page owner */}
+                  {currentUser && page && (
+                    (page.createdBy && currentUser.id.toString() === page.createdBy.id.toString()) ||
+                    (page.isYours === true) ||
+                    (!page.createdBy && page.isYours !== false)
+                  ) && (
+                    <button 
+                      className="dropdown-item delete-item"
+                      onClick={handleDeletePage}
+                    >
+                      <FaTrash /> Delete Page
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -379,7 +412,11 @@ const PageDetail = () => {
           )}
           
           {/* Post Buttons - Only show for page owner */}
-          {currentUser && page?.createdBy && currentUser.id === page.createdBy.id && (
+          {currentUser && page && (
+            (page.createdBy && currentUser.id.toString() === page.createdBy.id.toString()) ||
+            (page.isYours === true) ||
+            (!page.createdBy && page.isYours !== false)
+          ) && (
             <div className="post-buttons">
               <button 
                 className="post-button photo-post" 

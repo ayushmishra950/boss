@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, use } from "react";
 import { FaHome, FaPlus, FaHeart, FaCommentDots, FaTimes } from "react-icons/fa";
 import { MdVideoLibrary } from "react-icons/md";
 import { BsCameraFill } from "react-icons/bs";
@@ -76,11 +76,10 @@ const FloatingMenu = ({ isOpen, toggleMenu, setShowUploadForm, setShowVideoUploa
 // Success popup for post upload
 const SuccessPopup = ({ show }) => (
   <div
-    className={`fixed top-20 left-0 w-full flex justify-center z-[9999] transition-all duration-500 ${
-      show
+    className={`fixed top-20 left-0 w-full flex justify-center z-[9999] transition-all duration-500 ${show
         ? 'opacity-100 scale-100 translate-y-0'
         : 'opacity-0 scale-90 -translate-y-8 pointer-events-none'
-    }`}
+      }`}
     style={{ pointerEvents: show ? 'auto' : 'none' }}
   >
     <div className="flex items-center gap-3 px-6 py-3 border-2 border-purple-500 text-black rounded-xl shadow-lg bg-white">
@@ -100,27 +99,27 @@ const FooterNav = () => {
   const isReelsPage = location.pathname === "/reels";
   const isNotificationsPage = location.pathname === "/notifications";
   const { selectedChat } = useChat();
-  
+
   // Safe context usage
   let unreadCount = 0;
-  let refreshUnreadCount = () => {};
-  let markAsRead = () => {};
+  let refreshUnreadCount = () => { };
+  let markAsRead = () => { };
   let newNotifications = [];
-  let removeNotification = () => {};
+  let removeNotification = () => { };
   try {
     const notificationContext = useNotifications();
     unreadCount = notificationContext.unreadCount || 0;
-    refreshUnreadCount = notificationContext.refreshUnreadCount || (() => {});
-    markAsRead = notificationContext.markAsRead || (() => {});
+    refreshUnreadCount = notificationContext.refreshUnreadCount || (() => { });
+    markAsRead = notificationContext.markAsRead || (() => { });
     newNotifications = notificationContext.newNotifications || [];
-    removeNotification = notificationContext.removeNotification || (() => {});
+    removeNotification = notificationContext.removeNotification || (() => { });
   } catch (error) {
     console.error('Notification context error in FooterNav:', error);
     unreadCount = 0;
-    refreshUnreadCount = () => {};
-    markAsRead = () => {};
+    refreshUnreadCount = () => { };
+    markAsRead = () => { };
     newNotifications = [];
-    removeNotification = () => {};
+    removeNotification = () => { };
   }
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -134,7 +133,7 @@ const FooterNav = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const heartButtonRef = useRef(null);
   const [mobileNotificationPopup, setMobileNotificationPopup] = useState(null);
-  
+
 
 
   // Initialize real-time notifications
@@ -162,7 +161,7 @@ const FooterNav = () => {
   useEffect(() => {
     const decodedUser = GetTokenFromCookie();
     setUser(decodedUser);
-    
+
     // Initialize audio on component mount (with user interaction)
     const initAudio = () => {
       requestNotificationPermission();
@@ -170,13 +169,13 @@ const FooterNav = () => {
       document.removeEventListener('click', initAudio);
       document.removeEventListener('touchstart', initAudio);
     };
-    
+
     // Add listeners for user interaction to initialize audio
     document.addEventListener('click', initAudio);
     document.addEventListener('touchstart', initAudio);
-    
 
-    
+
+
     return () => {
       document.removeEventListener('click', initAudio);
       document.removeEventListener('touchstart', initAudio);
@@ -230,46 +229,84 @@ const FooterNav = () => {
     }
   };
 
+
+  const getLocationName = async (lat, lng) => {
+  const apiKey = "2bf06013c4314aeeab73c663d290eb8b";
+  const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}`);
+  const data = await response.json();
+  const locationName = data?.results?.[0]?.formatted;
+  return locationName;
+};
+
+
   const handlePostSubmit = async (e) => {
-    const locationName = "jaipur india";
-    e.preventDefault();
-    if (!user.id || !caption || (!image && !video)) return;
-    /* console.log(...) */ void 0;
-    
-    setIsUploading(true);
-    try {
-      await createPost({
-        variables: {
-          id: user.id,
-          caption,
-          image,
-          video,
-          locationName : locationName || null,
-        },
-      });
-      setIsUploading(false);
-      setShowUploadForm(false);
-      setShowVideoUploadForm(false);
-      setCaption("");
-      setImage(null);
-      setVideo(null);
-      setTimeout(() => {
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 2000);
-      }, 100);
-    } catch (err) {
-      setIsUploading(false);
-      console.error(err);
-      alert("Upload failed ❌");
-    }
-  };
+  e.preventDefault();
+
+  if (!user?.id || (!image && !video)) {
+    alert("Missing data!");
+    return;
+  }
+
+  setIsUploading(true);
+
+  try {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log("✅ Coordinates obtained:", { latitude, longitude });
+
+        // Step 1: Get location name
+        const locationName = await getLocationName(latitude, longitude);
+
+        // Step 2: Create the post
+        await createPost({
+          variables: {
+            id: user.id,
+            caption,
+            image,
+            video,
+            locationName: locationName || null,
+            location: {
+              type: "Point",
+              coordinates: [longitude, latitude],
+            },
+          },
+        });
+
+        setIsUploading(false);
+        setShowUploadForm(false);
+        setShowVideoUploadForm(false);
+        setCaption("");
+        setImage(null);
+        setVideo(null);
+
+        setTimeout(() => {
+          setShowSuccess(true);
+          setTimeout(() => setShowSuccess(false), 2000);
+        }, 100);
+      },
+
+      // 🔴 Error callback (location access failed)
+      (error) => {
+        console.error("Location error:", error);
+        setIsUploading(false);
+        alert("Location access denied. Cannot create post with location.");
+      }
+    );
+  } catch (err) {
+    console.error("Post creation failed:", err);
+    setIsUploading(false);
+    alert("Upload failed ❌");
+  }
+};
+
 
   if (location.pathname === '/chat') return null;
 
   return (
     <>
       <SuccessPopup show={showSuccess} />
-      
+
       <div className="fixed bottom-4 left-0 right-0 flex justify-center items-center z-50">
         <FloatingMenu isOpen={isMenuOpen} toggleMenu={toggleMenu} setShowUploadForm={setShowUploadForm} setShowVideoUploadForm={setShowVideoUploadForm} />
 
@@ -337,11 +374,12 @@ const FooterNav = () => {
               <form onSubmit={handlePostSubmit} className="flex flex-col gap-5">
                 <input
                   type="text"
-                  placeholder="Write a caption..."
+                  placeholder="Write a Optional caption..."
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   className="w-full p-3 mb-2 border-2 border-purple-200 rounded-xl bg-white/80 focus:outline-none focus:ring-2 focus:ring-purple-400 text-lg placeholder-gray-400 shadow-sm"
                 />
+
                 <div className="mb-2">
                   {!(image || video) ? (
                     <label
@@ -419,7 +457,7 @@ const FooterNav = () => {
             }}
           />
         )}
-        
+
         {/* Heart Icon Popup */}
         <HeartIconPopup heartButtonRef={heartButtonRef} />
       </div>

@@ -285,6 +285,7 @@ const typeDefs = gql`
     getSuggestedPages: [Page!]!
     getLikedPages(userId: ID!): [Page!]!
     getUserPages(userId: ID!): [Page!]!
+    getAllPages: [Page!]!
 
     # ✅ PageByUser Queries (optional)
     getPagePostsByUser(pageId: ID!): [PageByUser]
@@ -312,8 +313,15 @@ const typeDefs = gql`
     newPassword(email: String!, newPassword: String!): String
     updateUserPrivacy(userId: ID!, isPrivate: Boolean!): String
 
-    createPost(id: ID, caption: String!, locationName: String, image: Upload, video: Upload, thumbnail: Upload): Post
-    DeletePost(id: ID!): String
+createPost(
+    id: ID,
+    caption: String!,
+    locationName: String,
+    location: LocationInput,  # ✅ New input for coordinates
+    image: Upload,
+    video: Upload,
+    thumbnail: Upload
+  ): Post    DeletePost(id: ID!): String
     LikePost(userId: ID!, postId: ID!): String!
     CommentPost(userId: ID!, postId: ID!, text: String!): [Comment]!
 
@@ -353,6 +361,8 @@ const typeDefs = gql`
     # ✅ Pages Feature Mutations
     createPage(title: String!, profileImage: Upload, coverImage: Upload, category: String!, description: String, userId: ID!): Page
     likePage(userId: ID!, pageId: ID!): String
+    deletePage(userId: ID!, pageId: ID!): String
+
 
     # ✅ PageByUser Mutations
     createPagePost(caption: String!, image: Upload, video: Upload, thumbnail: Upload, pageId: ID!): PageByUser

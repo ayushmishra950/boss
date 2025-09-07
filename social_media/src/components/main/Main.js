@@ -25,48 +25,53 @@ const Main = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePostId, setDeletePostId] = useState(null);
   const postRefs = useRef({});
+  const [userLocation, setUserLocation] = useState(null);
 
-  const { data, loading, error, refetch } = useQuery(GET_ALL_POSTS, {
-    variables: {userId : tokens?.id},
-    errorPolicy: 'all', // Show partial data even if there are errors
-    fetchPolicy: 'cache-and-network', // Always fetch from network
-    onError: (error) => {
-      console.error('GraphQL Error:', error);
-    }
-  });  
- const defaultLat = 75.8574194;
-const defaultLon = 25.1737019;
+
+
+
+
+const { data, loading, error, refetch } = useQuery(GET_ALL_POSTS, {
+  variables: {
+    userId: tokens?.id,
+    userLocation: userLocation, // yahi null hoga pehle
+  },
+  skip: !userLocation, // ⛔ tab tak query run mat karo jab tak location null hai
+  fetchPolicy: "cache-and-network",
+  errorPolicy: "all",
+  onError: (err) => console.error("GraphQL Error:", err)
+});
+
   
-console.log("User location set to default Jaipur coordinates.", data);
+console.log( data);
 
-    useEffect(() => {
+
+
+useEffect(() => {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      // 👇 Current lat/lon le raha hai
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
+      console.log("✅ User location:", { lat, lon });
 
-      // 👇 GraphQL query me bhej raha hai
-      setAllPosts({
-        variables: {
-          userId: tokens?.id,
-          userLocation: { lat, lon }
-        }
+      setUserLocation({
+        type: "Point",
+        coordinates: [lon, lat]
       });
     },
     (err) => {
-      console.error("Location error:", err.message);
+      console.error("❌ Location error:", err.message);
 
-      // 👇 Agar location allow nahi hui to fallback location
-      setAllPosts({
-        variables: {
-          userId: tokens?.id,
-          userLocation: { lat: defaultLat, lon: defaultLon }
-        }
+      // fallback Jaipur
+      setUserLocation({
+        type: "Point",
+        coordinates: [75.8574194, 25.1737019]
       });
     }
   );
 }, []);
+
+
 
   const scrollStories = (direction) => {
     try {

@@ -4,9 +4,10 @@ import Navbar from '../../components/navbar/Navbar';
 import Sidebar from '../../components/sidebar/Sidebar';
 import FooterNav from '../../components/footer/FooterNav';
 import { useNavigate, useParams } from 'react-router-dom';
+import { GetTokenFromCookie } from '../../components/getToken/GetToken';
 
 const ProfilePage = () => {
-  const token = sessionStorage.getItem('user');
+  const token = GetTokenFromCookie();
   const navigate = useNavigate();
   const { userId } = useParams();
 

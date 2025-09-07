@@ -86,7 +86,12 @@ export default function Main({ userId }) {
 
         // Always get user data from getUserInformation
         const user = response?.data?.data?.getUserInformation;
-        /* console.log(...) */ void 0;
+        console.log('🔍 Frontend received user data:', user);
+        console.log('📊 Frontend user stats:', {
+          followers: user?.followers?.length || 0,
+          following: user?.following?.length || 0,
+          posts: user?.posts?.length || 0
+        });
         
          if (user) {
     const profileData = {
@@ -99,7 +104,7 @@ export default function Main({ userId }) {
       stats: {
         followers: user?.followers?.length || 0,
         following: user?.following?.length || 0,
-        posts: 0, // Will be updated when posts are fetched
+        posts: user?.posts?.length || 0,
       },
     };
 

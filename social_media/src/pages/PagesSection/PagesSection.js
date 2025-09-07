@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaPlus, FaThumbsUp, FaSearch, FaEllipsisH, FaTimes, FaGlobe, FaLock, FaImage, FaUserPlus, FaShare, FaArrowLeft } from 'react-icons/fa';
-import {GET_SUGGESTED_PAGES,CREATE_PAGE,GET_USER_PAGES,GET_LIKED_PAGES,LIKE_PAGE} from "../../graphql/mutations";
+import {GET_SUGGESTED_PAGES,CREATE_PAGE,GET_USER_PAGES,GET_LIKED_PAGES,LIKE_PAGE,GET_ALL_CATEGORIES_PAGES} from "../../graphql/mutations";
 import {useQuery,useMutation} from "@apollo/client"
 import {GetTokenFromCookie} from "../../components/getToken/GetToken"
 import { toast } from 'react-toastify';
+import ShareModal from '../../components/share/ShareModal';
 
 const PagesSection = () => {
   const navigate = useNavigate();
@@ -24,10 +25,8 @@ const PagesSection = () => {
   const [coverPreview, setCoverPreview] = useState('');
   const [profilePreview, setProfilePreview] = useState('');
   const [isCreatingPage, setIsCreatingPage] = useState(false);
-  const [categories] = useState([
-    'Business', 'Community', 'Entertainment', 'Food & Drink', 'Gaming',
-    'Health & Wellness', 'Hobbies', 'Lifestyle', 'News', 'Shopping', 'Technology', 'Other'
-  ]);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedPageToShare, setSelectedPageToShare] = useState(null);
 
   // Facebook-like dummy data for pages
   // Load pages from localStorage on initial render
@@ -44,6 +43,7 @@ const PagesSection = () => {
       setToken(tokens);
     }
   }, []);
+    const { data: categoriesData, error: categoriesError, refetch: refetchCategories } = useQuery(GET_ALL_CATEGORIES_PAGES);
   
   const { data, loading, error } = useQuery(GET_SUGGESTED_PAGES);
   const {data:yourPagesData,loading:yourPagesLoading,error:yourPagesError} = useQuery(GET_USER_PAGES,{variables:{userId:token?.id}});
@@ -378,6 +378,12 @@ const PagesSection = () => {
     navigate(-1); // Go back to the previous page
   };
 
+  const handleShare = (page, e) => {
+    e.stopPropagation();
+    setSelectedPageToShare(page);
+    setShowShareModal(true);
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-5 font-['Segoe_UI',sans-serif]">
       <header className="pt-4 mb-0 border-0">
@@ -524,10 +530,7 @@ const PagesSection = () => {
                     
                     <button 
                       className="flex items-center justify-center space-x-1 w-1/2 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-r-md transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Handle share action
-                      }}
+                      onClick={(e) => handleShare(page, e)}
                     >
                       <FaShare className="text-gray-500" />
                       <span>Share</span>
@@ -572,8 +575,8 @@ const PagesSection = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Select a category</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
+                  {(categoriesData?.getAllCategoriesPages || []).map(category => (
+                    <option key={category.id} value={category.name}>{category.name}</option>
                   ))}
                 </select>
               </div>
@@ -687,6 +690,22 @@ const PagesSection = () => {
           </div>
         </div>
       )}
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        contentType="page"
+        contentData={selectedPageToShare ? {
+          id: selectedPageToShare.id,
+          title: selectedPageToShare.name,
+          category: selectedPageToShare.category,
+          description: selectedPageToShare.description,
+          coverImage: selectedPageToShare.coverPhoto,
+          profileImage: selectedPageToShare.profilePhoto,
+          createdBy: selectedPageToShare.createdBy
+        } : {}}
+      />
     </div>
   );
 };

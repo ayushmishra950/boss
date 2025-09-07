@@ -19,6 +19,9 @@ const SharedContent = ({ messageData, onClick }) => {
       // Navigate to reels page
       navigate('/reels');
       // You can add logic to jump to specific reel here if needed
+    } else if (messageData.type === 'shared_page') {
+      // Navigate to the specific page
+      navigate(`/page/${messageData.pageId}`);
     }
   };
 
@@ -129,6 +132,51 @@ const SharedContent = ({ messageData, onClick }) => {
         
         <div className="mt-2 pt-2 border-t border-gray-200">
           <p className="text-xs text-gray-400">Tap to view reel</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (messageData.type === 'shared_page') {
+    return (
+      <div 
+        onClick={handleContentClick}
+        className="bg-gray-50 rounded-lg p-3 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors max-w-xs"
+      >
+        <div className="flex items-start space-x-3">
+          {/* Page Profile Image */}
+          <div className="flex-shrink-0">
+            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-200">
+              <img
+                src={messageData.pageProfileImage || 'https://via.placeholder.com/150?text=Page'}
+                alt="Page profile"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </div>
+
+          {/* Page Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-1 mb-1">
+              <span className="text-xs font-medium text-blue-600">📄 Shared Page</span>
+            </div>
+            <p className="text-sm text-gray-800 font-medium mb-1">
+              {messageData.pageTitle ? 
+                (messageData.pageTitle.length > 50 ? 
+                  `${messageData.pageTitle.substring(0, 50)}...` : 
+                  messageData.pageTitle
+                ) : 
+                'Shared a page'
+              }
+            </p>
+            <p className="text-xs text-gray-500">
+              Shared by {messageData.sharedBy}
+            </p>
+          </div>
+        </div>
+        
+        <div className="mt-2 pt-2 border-t border-gray-200">
+          <p className="text-xs text-gray-400">Tap to view page</p>
         </div>
       </div>
     );

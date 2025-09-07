@@ -1,5 +1,61 @@
 import { gql } from "@apollo/client";
 
+export const GET_ALL_PAGES = gql`
+  query GetAllPages {
+    getAllPages {
+      id
+      title
+      category
+      description
+      profileImage
+      coverImage
+      createdBy {
+        id
+      }
+      likedBy {
+        id
+      }
+      createdAt
+    }
+  }
+`;
+
+
+export const ADD_CATEGORY_PAGE = gql`
+  mutation AddCategoryPage($name: String!, $userId: ID!) {
+    addCategoryPage(name: $name, userId: $userId) {
+      id
+      name
+      createdAt
+    }
+  }
+`;
+export const DELETE_PAGE = gql`
+  mutation DeletePage($pageId: ID!, $userId: ID!) {
+    deletePage(pageId: $pageId, userId: $userId)
+  }
+`;
+
+export const DELETE_CATEGORY_PAGE = gql`
+  mutation DeleteCategoryPage($id: ID!, $userId: ID!) {
+    deleteCategoryPage(id: $id, userId: $userId)
+  }
+`;
+
+export const GET_ALL_CATEGORIES_PAGES = gql`
+  query GetAllCategoriesPages {
+    getAllCategoriesPages {  
+      id
+      name
+      createdAt
+      createdBy {
+        id
+        name
+      }
+    }
+  }
+`;
+
 export const CREATE_PAGE = gql`
   mutation CreatePage( $title: String!, $category: String!, $description: String, $userId: ID!, $profileImage: Upload, $coverImage: Upload ) {
     createPage(
@@ -630,6 +686,7 @@ export const CREATE_POST = gql`
     $video: Upload
     $thumbnail: Upload
     $locationName: String
+    $location: LocationInput
   ) {
     createPost(
       id: $id
@@ -638,6 +695,7 @@ export const CREATE_POST = gql`
       video: $video
       thumbnail: $thumbnail
       locationName: $locationName
+      location: $location
     ) {
       id
       caption
@@ -649,6 +707,7 @@ export const CREATE_POST = gql`
     }
   }
 `;
+
 
 export const DELETE_POST_BY_ADMIN = gql`
   mutation DeletePostByAdmin($id: ID!, $type: String!) { 

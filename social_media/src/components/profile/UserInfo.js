@@ -504,6 +504,7 @@ export default function UserInfo({setProfile, profile, isFollowed, setIsFollowed
       onCompleted: (data) => {
         if (data?.getUserInformation) {
           const userInfo = data.getUserInformation;
+          console.log('🔍 UserInfo received data:', userInfo);
           console.log('📊 Updated user stats:', {
             followers: userInfo.followers?.length || 0,
             following: userInfo.following?.length || 0,

@@ -80,6 +80,13 @@ getPagePostsByUser: async (_, { pageId }) => {
         throw new Error("Failed to fetch suggested pages");
       }
     },
+    getAllPages: async () => {
+      try {
+        return await Page.find().populate("createdBy likedBy");
+      } catch (error) {
+        throw new Error("Failed to fetch all pages");
+      }
+    },
 
     getLikedPages: async (_, { userId }) => {
       try {
@@ -678,7 +685,13 @@ searchUsers: async (_, { username, userId }) => {
 
   getUserInformation: async (_, { id }) => {
   try {
-    const user = await User.findById(id);
+    console.log('🔍 Fetching user information for ID:', id);
+    
+    const user = await User.findById(id)
+      .populate('followers', 'id name username profileImage')
+      .populate('following', 'id name username profileImage')
+      .populate('posts', 'id');
+    
     if (!user) {
       throw new Error("User not found");
     }
@@ -687,8 +700,15 @@ searchUsers: async (_, { username, userId }) => {
       throw new Error("User is blocked by Admin");
     }
 
+    console.log('📊 User stats:', {
+      followers: user.followers?.length || 0,
+      following: user.following?.length || 0,
+      posts: user.posts?.length || 0
+    });
+
     return user;
   } catch (error) {
+    console.error('❌ Error in getUserInformation:', error);
     throw new Error(error.message || "Something went wrong");
   }
 },
@@ -947,6 +967,33 @@ hideStoryFrom: async (_, { userIds,currentUserId}, { currentUser }) => {
       }
     },
 
+    deletePage: async (_, { pageId, userId }) => {
+  if (!pageId) throw new Error("Page ID is required");
+  if (!userId) throw new Error("User ID is required");
+
+  // Step 1: Delete the page
+  const deletedPage = await Page.findByIdAndDelete(pageId);
+  if (!deletedPage) throw new Error("Page not found");
+
+  // Step 2: Find the user who created it
+  const user = await User.findById(deletedPage.createdBy);
+  if (!user) throw new Error("Creator user not found");
+
+  if( user._id.toString() !== userId) {
+    throw new Error("You are not authorized to delete this page");
+  }
+
+  // Step 3: Remove this page's ID from user's createdPages array
+  user.createdPages = user.createdPages.filter(
+    pageId => pageId.toString() !== deletedPage._id.toString()
+  );
+
+  // Step 4: Save the updated user document
+  await user.save();
+
+  return "Page deleted successfully";
+},
+
     // ✅ likePage with try-catch
     likePage: async (_, { userId, pageId }) => {
       try {
@@ -1068,24 +1115,79 @@ createPagePost: async (_, { caption, image, video, pageId }) => {
       }
     },
 
-    createPost: async (_, { id, caption, image, video, thumbnail, locationName }) => {
+//     createPost: async (_, { id, caption, image, video, thumbnail, locationName }) => {
+//   let imageUrl = null;
+//   let videoUrl = null;
+//   let thumbnailUrl = null;
+//   let location = undefined;
+
+//   // ✅ Geocode locationName to coordinates
+//   if (locationName) {
+//     try {
+//       const coords = await geocodeLocation(locationName); // await is necessary
+//       location = {
+//         type: 'Point',
+//         coordinates: [coords.lon, coords.lat], // [longitude, latitude]
+//       };
+//     } catch (error) {
+//       console.warn("Location not found or geocoding failed:", error.message);
+//     }
+//   }
+
+//   // ✅ Upload image
+//   if (image) {
+//     imageUrl = await uploadToCloudinary(image, 'image');
+//   }
+
+//   // ✅ Upload video
+//   if (video) {
+//     if (video.size > 300 * 1024 * 1024) {
+//       throw new Error("Video should be under 300MB");
+//     }
+//     const videoResponse = await uploadToCloudinary(video, 'video');
+//     videoUrl = videoResponse.url;
+//   }
+
+//   // ✅ Upload thumbnail
+//   if (thumbnail) {
+//     thumbnailUrl = await uploadToCloudinary(thumbnail, 'image');
+//   }
+
+//   // ✅ At least one media required
+//   // if (!imageUrl && !videoUrl) {
+//   //   throw new Error('Either image or video must be provided');
+//   // }
+
+//   // ✅ Create the post
+//   const post = await Post.create({
+//     caption,
+//     imageUrl,
+//     videoUrl,
+//     thumbnailUrl,
+//     locationName: locationName || null,
+//     location: location || undefined,
+//     createdBy: id,
+//   });
+
+//   // ✅ Add post to user's post list
+//   await User.findByIdAndUpdate(id, { $push: { posts: post._id } });
+
+//   return post;
+// },
+
+
+createPost: async (_, {
+  id,
+  caption,
+  image,
+  video,
+  thumbnail,
+  locationName,
+  location // ✅ Accept directly from frontend
+}) => {
   let imageUrl = null;
   let videoUrl = null;
   let thumbnailUrl = null;
-  let location = undefined;
-
-  // ✅ Geocode locationName to coordinates
-  if (locationName) {
-    try {
-      const coords = await geocodeLocation(locationName); // await is necessary
-      location = {
-        type: 'Point',
-        coordinates: [coords.lon, coords.lat], // [longitude, latitude]
-      };
-    } catch (error) {
-      console.warn("Location not found or geocoding failed:", error.message);
-    }
-  }
 
   // ✅ Upload image
   if (image) {
@@ -1106,11 +1208,6 @@ createPagePost: async (_, { caption, image, video, pageId }) => {
     thumbnailUrl = await uploadToCloudinary(thumbnail, 'image');
   }
 
-  // ✅ At least one media required
-  // if (!imageUrl && !videoUrl) {
-  //   throw new Error('Either image or video must be provided');
-  // }
-
   // ✅ Create the post
   const post = await Post.create({
     caption,
@@ -1118,16 +1215,17 @@ createPagePost: async (_, { caption, image, video, pageId }) => {
     videoUrl,
     thumbnailUrl,
     locationName: locationName || null,
-    location: location || undefined,
+    location: location || undefined, // 🆕 coordinates from frontend
     createdBy: id,
   });
 
   // ✅ Add post to user's post list
-  await User.findByIdAndUpdate(id, { $push: { posts: post._id } });
+  await User.findByIdAndUpdate(id, {
+    $push: { posts: post._id }
+  });
 
   return post;
 },
-
    // 📌 Save Post Resolver
 savePost: async (_, { userId, postId }) => {
   try {

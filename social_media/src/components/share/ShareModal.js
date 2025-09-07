@@ -78,6 +78,19 @@ const ShareModal = ({ isOpen, onClose, contentType, contentData }) => {
           sharedAt: new Date().toISOString(),
           customMessage: customMessage
         };
+      } else if (contentType === 'page') {
+        shareData = {
+          type: 'shared_page',
+          pageId: contentData.id,
+          pageTitle: contentData.title,
+          pageCategory: contentData.category,
+          pageDescription: contentData.description,
+          pageCoverImage: contentData.coverImage,
+          pageProfileImage: contentData.profileImage,
+          sharedBy: user?.name,
+          sharedAt: new Date().toISOString(),
+          customMessage: customMessage
+        };
       }
 
       // Send share message to each selected user with animation
@@ -181,7 +194,7 @@ const ShareModal = ({ isOpen, onClose, contentType, contentData }) => {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b">
             <h2 className="text-lg font-semibold text-gray-800">
-              Share {contentType === 'post' ? 'Post' : 'Reel'}
+              Share {contentType === 'post' ? 'Post' : contentType === 'reel' ? 'Reel' : 'Page'}
             </h2>
             <button
               onClick={onClose}

@@ -74,6 +74,13 @@ const adminTypeDefs = gql`
     createdAt: String!
   }
 
+  type CategoryPage {
+    id: ID!
+    name: String!
+    createdBy: User!
+    createdAt: String!
+  }
+
   input CreateCategoryInput {
     name: String!
   }
@@ -130,6 +137,7 @@ const adminTypeDefs = gql`
      getUserCommentedReels(userId: ID!): [Video!]!
      getUserCommentedVideos(userId: ID!): [Post!]!
      getAllCategories: [Category!]!
+    getAllCategoriesPages: [CategoryPage!]!
     getCategoryById(id: ID!): Category
   }
 
@@ -141,6 +149,8 @@ const adminTypeDefs = gql`
      DeletePostByAdmin(id: ID!,type: String!) : String!
      createCategory(name: String!, userId: ID!): Category!
     deleteCategory(id: ID!, userId: ID!): Boolean!
+    addCategoryPage(name: String!,userId: ID!): CategoryPage!
+    deleteCategoryPage(id: ID!, userId: ID): Boolean!
   }
 `;
 

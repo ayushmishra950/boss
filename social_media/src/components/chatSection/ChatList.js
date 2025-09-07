@@ -395,7 +395,7 @@ const ChatList = ({ activeTab, createdGroups }) => {
       const messagesMap = {};
       lastMessagesData.getLastMessages.forEach(msg => {
         // Determine the other user in the conversation
-        const otherUserId = msg.sender.id === sender?.id ? msg.receiver.id : msg.sender.id;
+        const otherUserId = msg.sender.id?.toString() === sender?.id?.toString() ? msg.receiver.id : msg.sender.id;
         messagesMap[otherUserId] = msg;
       });
 
@@ -1533,8 +1533,8 @@ const ChatList = ({ activeTab, createdGroups }) => {
             // For text messages
             if (msg.message && existingMsg.message) {
               const isMatch = existingMsg.message === msg.message &&
-                existingMsg.sender.id === msg.sender.id &&
-                existingMsg.receiver.id === msg.receiver.id;
+                existingMsg.sender.id?.toString() === msg.sender.id?.toString() &&
+                existingMsg.receiver.id?.toString() === msg.receiver.id?.toString();
               if (isMatch) {
                 /* console.log(...) */ void 0;
               }
@@ -1543,8 +1543,8 @@ const ChatList = ({ activeTab, createdGroups }) => {
 
             // For media messages
             if (msg.media && existingMsg.media) {
-              const isMatch = existingMsg.sender.id === msg.sender.id &&
-                existingMsg.receiver.id === msg.receiver.id &&
+              const isMatch = existingMsg.sender.id?.toString() === msg.sender.id?.toString() &&
+                existingMsg.receiver.id?.toString() === msg.receiver.id?.toString() &&
                 existingMsg.media.filename === msg.media.filename &&
                 existingMsg.media.type === msg.media.type;
               if (isMatch) {
@@ -1579,8 +1579,8 @@ const ChatList = ({ activeTab, createdGroups }) => {
               // For text messages
               if (msg.message && existingMsg.message) {
                 const textMatch = existingMsg.message === msg.message &&
-                  existingMsg.sender.id === msg.sender.id &&
-                  existingMsg.receiver.id === msg.receiver.id;
+                  existingMsg.sender.id?.toString() === msg.sender.id?.toString() &&
+                  existingMsg.receiver.id?.toString() === msg.receiver.id?.toString();
                 console.log("📝 Text message match check:", {
                   messageMatch: existingMsg.message === msg.message,
                   senderMatch: existingMsg.sender.id === msg.sender.id,
@@ -2612,7 +2612,7 @@ const ChatList = ({ activeTab, createdGroups }) => {
               <div className="flex-1 overflow-y-auto p-4 custom-scrollbar min-h-0 bg-gray-50">
                 <div className="space-y-4">
                   {Array.isArray(messages) && messages.length > 0 && messages.map((msg) => {
-                    const isSent = msg?.sender?.id === sender?.id;
+                    const isSent = msg?.sender?.id?.toString() === sender?.id?.toString();
                     let quoted = null;
                     let mainText = msg.message;
                     if (msg.message && msg.message.startsWith('> ')) {
@@ -2756,7 +2756,7 @@ const ChatList = ({ activeTab, createdGroups }) => {
                           {(() => {
                             try {
                               const parsedMessage = JSON.parse(mainText || '{}');
-                              if (parsedMessage.type === 'shared_post' || parsedMessage.type === 'shared_reel') {
+                              if (parsedMessage.type === 'shared_post' || parsedMessage.type === 'shared_reel' || parsedMessage.type === 'shared_page') {
                                 return <SharedContent messageData={parsedMessage} />;
                               }
                             } catch (e) {
@@ -2769,7 +2769,7 @@ const ChatList = ({ activeTab, createdGroups }) => {
                           {(() => {
                             try {
                               const parsedMessage = JSON.parse(mainText || '{}');
-                              if (parsedMessage.type === 'shared_post' || parsedMessage.type === 'shared_reel') {
+                              if (parsedMessage.type === 'shared_post' || parsedMessage.type === 'shared_reel' || parsedMessage.type === 'shared_page') {
                                 return null; // Don't show text for shared content
                               }
                             } catch (e) {
