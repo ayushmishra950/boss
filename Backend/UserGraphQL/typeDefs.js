@@ -86,8 +86,8 @@ const typeDefs = gql`
     createdBy: Page
     createdAt: String
     isArchived: Boolean
-    likes: [PageLike]
-    comments: [PageComment]
+    likes: [Like]
+    comments: [Comment]
   }
 
   #############################
@@ -282,7 +282,7 @@ const typeDefs = gql`
     activityLogs(userId: ID!): [ActivityLog]
 
     # ✅ Pages Feature Queries
-    getSuggestedPages: [Page!]!
+   getSuggestedPages(userLocation: LocationInput): [Page!]!
     getLikedPages(userId: ID!): [Page!]!
     getUserPages(userId: ID!): [Page!]!
     getAllPages: [Page!]!
@@ -359,13 +359,15 @@ createPost(
     LikeReply(userId: ID!, postId: ID!, commentId: ID!, replyId: ID!): String
 
     # ✅ Pages Feature Mutations
-    createPage(title: String!, profileImage: Upload, coverImage: Upload, category: String!, description: String, userId: ID!): Page
+    createPage(title: String!, locationName: String, location: LocationInput, profileImage: Upload, coverImage: Upload, category: String!, description: String, userId: ID!): Page
     likePage(userId: ID!, pageId: ID!): String
     deletePage(userId: ID!, pageId: ID!): String
 
 
     # ✅ PageByUser Mutations
     createPagePost(caption: String!, image: Upload, video: Upload, thumbnail: Upload, pageId: ID!): PageByUser
+    likePagePost(userId: ID!, postId: ID!): String!
+    commentPagePost(userId: ID!, postId: ID!, comment: String!): String!
    
   }
 `;

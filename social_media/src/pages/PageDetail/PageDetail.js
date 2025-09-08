@@ -4,7 +4,7 @@ import { FaThumbsUp, FaShare, FaArrowLeft, FaGlobe, FaCalendarAlt, FaMapMarkerAl
 import { BsGrid3X3 } from 'react-icons/bs';
 import PostCard from '../../components/postCard/PostCard';
 import { useQuery,useMutation } from '@apollo/client';
-import { GET_PAGE_BY_ID, CREATE_PAGE_POST, GET_PAGE_POSTS, GET_ME ,DELETE_PAGE,GET_ALL_PAGES} from '../../graphql/mutations';
+import { ALL_GET_PAGE_POSTS,LIKE_PAGE_POST,COMMENT_PAGE_POST,GET_PAGE_BY_ID, CREATE_PAGE_POST, GET_PAGE_POSTS, GET_ME ,DELETE_PAGE,GET_ALL_PAGES} from '../../graphql/mutations';
 import { toast } from 'react-toastify';
 import './PageDetail.css';
 import {GetTokenFromCookie} from "../../components/getToken/GetToken"
@@ -25,7 +25,7 @@ const PageDetail = () => {
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [token,setToken] = useState();
-
+  const [comment, setComment] = useState("");
   const [deletePage] = useMutation(DELETE_PAGE);
   const { data: allPagesData, loading: allPagesLoading } = useQuery(GET_ALL_PAGES);
 
@@ -60,14 +60,88 @@ const PageDetail = () => {
   };
 
 
-  // Removed GET_PAGE_BY_ID query since we're using getAllPages
-  const { data: pagePostsData, loading: pagePostsLoading, error: pagePostsError } = useQuery(GET_PAGE_POSTS, {
-    variables: { pageId },
-    skip: !pageId,
-    fetchPolicy: 'cache-first'
-  });
   const [posts, setPosts] = useState([]);
+  
+  // Fetch posts for the page
+  // const { loading: postsLoading, error: postsError } = useQuery(ALL_GET_PAGE_POSTS, {
+  //   variables: { pageId },
+  //   skip: !pageId,
+  //   onCompleted: (data) => {
+  //     if (data?.getPagePosts) {
+  //       console.log('Fetched posts:', data.getPagePosts); // Debug log
+  //       const formattedPosts = data.getPagePosts
+  //         .filter(post => !post.isArchived) // Filter out archived posts
+  //         .map(post => ({
+  //           id: post.id,
+  //           userAvatar: post.createdBy?.profileImage || 'https://via.placeholder.com/40',
+  //           username: post.createdBy?.title || 'Page',
+  //           timeAgo: formatTimeAgo(post.createdAt) || 'Just now',
+  //           caption: post.caption,
+  //           media: post.videoUrl || post.imageUrl,
+  //           type: post.videoUrl ? 'video' : 'image',
+  //           likes: post.likes || [],
+  //           comments: post.comments?.map(comment => ({
+  //             id: comment.id,
+  //             text: comment.text,
+  //             user: {
+  //               id: comment.user?.id,
+  //               name: comment.user?.name || 'User',
+  //               username: comment.user?.username || 'user',
+  //               profileImage: comment.user?.profileImage
+  //             },
+  //             commentedAt: comment.commentedAt,
+  //             likes: comment.likes || []
+  //           })) || []
+  //         }));
+  //       console.log('Formatted posts:', formattedPosts); // Debug log
+  //       setPosts(formattedPosts);
+  //     }
+  //   },
+  //   onError: (error) => {
+  //     console.error('Error fetching posts:', error);
+  //   }
+  // });
+
+    const { data, loading: postsLoading, error: postsError } = useQuery(ALL_GET_PAGE_POSTS, {
+      variables: { pageId },
+      skip: !pageId,
+      onCompleted: (data) => {
+        if (data?.getPagePosts) {
+          const formattedPosts = data.getPagePosts.map(post => ({
+            id: post.id,
+            userAvatar: post.createdBy?.profileImage || 'https://via.placeholder.com/40',
+            username: post.createdBy?.title || 'Page',
+            timeAgo: formatTimeAgo(post.createdAt) || 'Just now',
+            caption: post.caption || '',
+            media: post.videoUrl || post.imageUrl || '',
+            type: post.videoUrl ? 'video' : 'image',
+            likes: [],
+            comments: []
+          }));
+          setPosts(formattedPosts);
+        }
+      },
+      onError: (error) => {
+        console.error('Error fetching posts:', error);
+      }
+    });
+
+  // Helper function to format time
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return 'Just now';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
   const [createPagePost,{error}] = useMutation(CREATE_PAGE_POST)
+  const [likePagePost] = useMutation(LIKE_PAGE_POST)
+  const [commentPagePost] = useMutation(COMMENT_PAGE_POST)
+
   
   // Get current user data for profile photo
   const { data: currentUserData, loading: userLoading } = useQuery(GET_ME, {
@@ -75,6 +149,51 @@ const PageDetail = () => {
   });
   
   const currentUser = currentUserData?.getMe;
+
+
+  const handleLikePagePost = async (postId) => {
+    try {
+      const response = await likePagePost({
+        variables: {
+          userId: token?.id,
+          postId: postId,
+        },
+      });
+
+      console.log("✅ Server Response:", response);
+      alert(response.data.likePagePost); // e.g., "pages post like successfully"
+
+    } catch (err) {
+      console.error("❌ Error liking post:", err.message);
+      alert("Kuch galat ho gaya. Please try again.");
+    }
+  };
+
+
+  const handleCommentSubmit = async (postId) => {
+    if (!comment.trim()) {
+      alert("Comment khaali nahi ho sakta!");
+      return;
+    }
+
+    try {
+      const response = await commentPagePost({
+        variables: {
+          postId: postId,
+          comment: comment,
+        },
+      });
+
+      console.log("✅ Server Response:", response.data.commentPagePost);
+      alert(response.data.commentPagePost); // e.g., "Commented successfully"
+      setComment(""); // clear input
+
+    } catch (err) {
+      console.error("❌ Error while commenting:", err.message);
+      alert("Comment bhejne me error aaya.");
+    }
+  };
+
 
 
     const handleFileChange = (event) => {
@@ -138,8 +257,8 @@ const PageDetail = () => {
         // Transform the GraphQL response to match PostCard expected format
         const transformedPost = {
           id: newPost.id,
-          userAvatar: currentUser?.profileImage || newPost.actualUser?.profileImage || 'https://via.placeholder.com/40',
-          username: currentUser?.name || currentUser?.username || newPost.actualUser?.name || newPost.actualUser?.username || 'User',
+          userAvatar: newPost.createdBy?.profileImage || currentUser?.profileImage || 'https://via.placeholder.com/40',
+          username: newPost.createdBy?.title || currentUser?.name || currentUser?.username || 'User',
           timeAgo: 'Just now',
           caption: newPost.caption,
           media: newPost.imageUrl || newPost.videoUrl,
@@ -228,24 +347,6 @@ const PageDetail = () => {
     }
   }, [pageId, navigate, allPagesData, allPagesLoading, currentUser]);
 
-  useEffect(() => {
-    if (pagePostsData?.getPagePosts) {
-      const graphqlPosts = pagePostsData.getPagePosts;
-      const formattedPosts = graphqlPosts.map(post => ({
-        id: post.id,
-        userAvatar: post.actualUser?.profileImage || currentUser?.profileImage || 'https://via.placeholder.com/40',
-        username: post.actualUser?.name || post.actualUser?.username || currentUser?.name || currentUser?.username || 'User',
-        timeAgo: 'Just now',
-        caption: post.caption,
-        media: post.videoUrl || post.imageUrl,
-        type: post.videoUrl ? 'video' : 'image',
-        likes: post.likes?.length || 0,
-        comments: post.comments || []
-      }));
-      
-      setPosts(formattedPosts);
-    }
-  }, [pagePostsData, page]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -311,7 +412,7 @@ const PageDetail = () => {
     setPostCaption('');
   };
 
-  if (isLoading || allPagesLoading || pagePostsLoading || userLoading) {
+  if (isLoading || postsLoading || userLoading) {
     return <div className="page-detail-loading">Loading...</div>;
   }
 
@@ -456,33 +557,54 @@ const PageDetail = () => {
         </button>
       </div>
 
+      {/* Debug Info */}
+      <div style={{ padding: '10px', background: '#f0f0f0', margin: '10px 0', borderRadius: '4px' }}>
+        <div>Posts Loading: {postsLoading ? 'Yes' : 'No'}</div>
+        <div>Number of Posts: {posts.length}</div>
+        {postsError && <div>Error: {postsError.message}</div>}
+      </div>
+
       {/* Posts Feed */}
       <div className="profile-content">
-        {posts.length > 0 ? (
+        {postsLoading ? (
+          <div className="loading-posts">Loading posts...</div>
+        ) : posts.length > 0 ? (
           <div className="posts-feed">
             {posts.map(post => (
               <PostCard 
                 key={post.id}
                 post={post}
-                onLike={(postId, liked) => {
-                  setPosts(posts.map(p => 
-                    p.id === postId 
-                      ? { ...p, likes: liked ? p.likes + 1 : p.likes - 1 } 
-                      : p
-                  ));
+                onLike={async (postId, liked) => {
+                  try {
+                    await handleLikePagePost(postId);
+                    return true; // Indicate success
+                  } catch (error) {
+                    console.error('Error handling like:', error);
+                    return false; // Indicate failure
+                  }
                 }}
-                onComment={(postId, comment) => {
-                  setPosts(posts.map(p => 
-                    p.id === postId 
-                      ? { 
-                          ...p, 
-                          comments: [
-                            ...p.comments, 
-                            { id: Date.now(), user: 'Current User', text: comment }
-                          ] 
-                        } 
-                      : p
-                  ));
+                onComment={async (postId, commentText) => {
+                  try {
+                    await handleCommentSubmit(postId);
+                    setPosts(posts.map(p => 
+                      p.id === postId 
+                        ? { 
+                            ...p, 
+                            comments: [
+                              ...p.comments, 
+                              { 
+                                id: Date.now(), 
+                                user: currentUser?.name || currentUser?.username || 'User', 
+                                text: commentText 
+                              }
+                            ] 
+                          } 
+                        : p
+                    ));
+                    setComment(''); // Clear the comment input after successful submission
+                  } catch (error) {
+                    console.error('Error submitting comment:', error);
+                  }
                 }}
                 onShare={(post) => {
                   // Implement share functionality

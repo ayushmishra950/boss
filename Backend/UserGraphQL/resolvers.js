@@ -73,13 +73,90 @@ getPagePostsByUser: async (_, { pageId }) => {
     throw new Error("Failed to fetch page posts");
   }
 },
-    getSuggestedPages: async () => {
+
+getPagePosts: async (_, { pageId }) => {
+  try {
+    const posts = await PageByUser.find({ createdBy: pageId }).populate('createdBy').populate('likes').populate('comments');
+
+    // Map kar ke har post me id set karo from _id
+    const formattedPosts = posts.map(post => {
+      if (!post) return null; // null check
+      
+      const postObj = post.toObject();
+      
+      // Make sure _id exists
+      if (!postObj._id) return null;
+
+      // _id ko id me convert karo
+      postObj.id = postObj._id.toString();
+
+      // Agar createdBy object hai to uska id bhi convert karo
+      if (postObj.createdBy && postObj.createdBy._id) {
+        postObj.createdBy.id = postObj.createdBy._id.toString();
+      }
+
+      return postObj;
+    });
+
+    // Null posts hata do (agar koi ho)
+    return formattedPosts.filter(post => post !== null);
+
+  } catch (error) {
+    throw new Error("Failed to fetch posts: " + error.message);
+  }
+},
+    // getSuggestedPages: async () => {
+    //   try {
+    //     return await Page.find().populate("createdBy likedBy");
+    //   } catch (error) {
+    //     throw new Error("Failed to fetch suggested pages");
+    //   }
+    // },
+
+
+    getSuggestedPages: async (_, { userLocation }) => {
       try {
-        return await Page.find().populate("createdBy likedBy");
+        const maxDistance = 10000; // 10 km
+    
+        // 🔍 Check if userLocation provided
+        let nearbyPages = [];
+        if (userLocation?.coordinates) {
+          const [lon, lat] = userLocation.coordinates;
+    
+          // 🗺️ Geo-query for nearby pages
+          nearbyPages = await Page.find({
+            location: {
+              $near: {
+                $geometry: {
+                  type: "Point",
+                  coordinates: [lon, lat],
+                },
+                $maxDistance: maxDistance,
+              }
+            }
+          }).populate("createdBy likedBy");
+        }
+    
+        // 🔁 Get some random/popular pages as backup or extra suggestions
+        const otherPages = await Page.find().limit(20).populate("createdBy likedBy");
+    
+        // 🧠 Combine and remove duplicates
+        const combined = [...nearbyPages, ...otherPages];
+        const uniquePagesMap = new Map();
+    
+        combined.forEach(page => {
+          uniquePagesMap.set(page._id.toString(), page);
+        });
+    
+        return Array.from(uniquePagesMap.values());
+        
       } catch (error) {
+        console.error('getSuggestedPages error:', error);
         throw new Error("Failed to fetch suggested pages");
       }
     },
+    
+    
     getAllPages: async () => {
       try {
         return await Page.find().populate("createdBy likedBy");
@@ -929,23 +1006,83 @@ hideStoryFrom: async (_, { userIds,currentUserId}, { currentUser }) => {
       return "Story hidden from selected users.";
     },
 
-    createPage: async (_, { title, category, profileImage, coverImage, description, userId }) => {
+    // createPage: async (_, { title, category, profileImage, coverImage, description, userId }) => {
+    //   try {
+    //       if(!title || !category || !description || !userId || !profileImage || !coverImage) throw new Error("Missing required fields");
+    //     let imageUrl = null;
+    //     let coverUrl = null;
+
+    //     if (profileImage) {
+    //       imageUrl = await uploadToCloudinary(profileImage, 'image');
+    //     }
+
+    //     if (coverImage) {
+    //       coverUrl = await uploadToCloudinary(coverImage, 'image');
+    //     }
+
+    //     const user = await User.findById(userId);
+    //     if (!user) throw new Error("User not found");
+
+    //     const page = new Page({
+    //       title,
+    //       category,
+    //       description,
+    //       profileImage: imageUrl,
+    //       coverImage: coverUrl,
+    //       createdBy: userId,
+    //     });
+
+    //     await page.save();
+
+    //     await User.findByIdAndUpdate(userId, {
+    //       $push: { createdPages: page._id },
+    //     });
+
+    //     return page;
+    //   } catch (error) {
+    //     throw new Error(error.message || "Failed to create page");
+    //   }
+    // },
+
+
+
+
+    createPage: async (
+      _,
+      {
+        title,
+        category,
+        profileImage,
+        coverImage,
+        description,
+        userId,
+        locationName,
+        location
+      }
+    ) => {
       try {
-          if(!title || !category || !description || !userId || !profileImage || !coverImage) throw new Error("Missing required fields");
+        // 🔍 Validate required fields
+        if (!title || !category || !description || !userId || !profileImage || !coverImage) {
+          throw new Error("Missing required fields");
+        }
+    
+        // 📤 Upload images to Cloudinary
         let imageUrl = null;
         let coverUrl = null;
-
+    
         if (profileImage) {
           imageUrl = await uploadToCloudinary(profileImage, 'image');
         }
-
+    
         if (coverImage) {
           coverUrl = await uploadToCloudinary(coverImage, 'image');
         }
-
+    
+        // 👤 Check user exists
         const user = await User.findById(userId);
         if (!user) throw new Error("User not found");
-
+    
+        // 📄 Create new Page
         const page = new Page({
           title,
           category,
@@ -953,19 +1090,23 @@ hideStoryFrom: async (_, { userIds,currentUserId}, { currentUser }) => {
           profileImage: imageUrl,
           coverImage: coverUrl,
           createdBy: userId,
+          locationName: locationName || null,
+          location: location || null, // location should be in { type: "Point", coordinates: [lng, lat] }
         });
-
+    
         await page.save();
-
+    
+        // 🔁 Add to user's createdPages
         await User.findByIdAndUpdate(userId, {
           $push: { createdPages: page._id },
         });
-
+    
         return page;
+    
       } catch (error) {
         throw new Error(error.message || "Failed to create page");
       }
-    },
+    },    
 
     deletePage: async (_, { pageId, userId }) => {
   if (!pageId) throw new Error("Page ID is required");
@@ -1089,18 +1230,13 @@ createPagePost: async (_, { caption, image, video, pageId }) => {
           videoUrl = await uploadToCloudinary(video, 'video');
         }
 
-        // ✅ Upload thumbnail if exists
-        let thumbnailUrl = null;
-        if (thumbnail) {
-          thumbnailUrl = await uploadToCloudinary(thumbnail, 'image');
-        }
-
+      
         // ✅ Create post document
         const newPost = new PageByUser({
           caption,
           imageUrl,
           videoUrl,
-          thumbnailUrl,
+          thumbnailUrl: null,
           createdBy: pageId,
         });
 
@@ -1113,6 +1249,42 @@ createPagePost: async (_, { caption, image, video, pageId }) => {
         console.error("Error creating page post:", error);
         throw new Error("Failed to create page post");
       }
+    },
+
+    likePagePost: (_, { postId,userId }, context) => {
+
+      const post = PageByUser.findById(postId);
+      if (!post) {
+        throw new Error("Post nahi mila!");
+      }
+
+      const alreadyLiked = post.likedBy.includes(userId);
+
+      if (alreadyLiked) {
+        // Unlike karna hai
+        post.likedBy = post.likedBy.filter(id => id !== userId);
+        post.likes -= 1;
+
+        return "pages post Unlike successfully" 
+      } else {
+        // Like karna hai
+        post.likedBy.push(userId);
+        post.likes += 1;
+
+        return "pages post like successfully" 
+
+      }
+    },
+
+    commentPagePost: (_, { postId, comment }) => {
+      const post = PageByUser.findById(postId);
+      if (!post) {
+        throw new Error("Post nahi mila!");
+      }
+
+      post.comments.push(comment);
+
+      return "Commented successfully"
     },
 
 //     createPost: async (_, { id, caption, image, video, thumbnail, locationName }) => {

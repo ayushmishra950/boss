@@ -2,14 +2,25 @@ import React, { useState } from 'react';
 import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisV, FaPlayCircle } from 'react-icons/fa';
 
 const PostCard = ({ post, onLike, onComment, onShare }) => {
-  const [isLiked, setIsLiked] = useState(false);
+  const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [isSaved, setIsSaved] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    onLike?.(post.id, !isLiked);
+  const handleLike = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    if (isLiking) return;
+    
+    try {
+      setIsLiking(true);
+      await onLike?.(post.id, !isLiked);
+      setIsLiked(!isLiked);
+    } finally {
+      setIsLiking(false);
+    }
   };
 
   const handleComment = (e) => {

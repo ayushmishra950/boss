@@ -27,6 +27,8 @@ const PagesSection = () => {
   const [isCreatingPage, setIsCreatingPage] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedPageToShare, setSelectedPageToShare] = useState(null);
+    const [userLocation, setUserLocation] = useState(null);
+  
 
   // Facebook-like dummy data for pages
   // Load pages from localStorage on initial render
@@ -43,7 +45,7 @@ const PagesSection = () => {
       setToken(tokens);
     }
   }, []);
-    const { data: categoriesData, error: categoriesError, refetch: refetchCategories } = useQuery(GET_ALL_CATEGORIES_PAGES);
+    const { data: categoriesData, error: categoriesError, refetch: refetchCategories } = useQuery(GET_ALL_CATEGORIES_PAGES,{variables : {userLocation : userLocation}});
   
   const { data, loading, error } = useQuery(GET_SUGGESTED_PAGES);
   const {data:yourPagesData,loading:yourPagesLoading,error:yourPagesError} = useQuery(GET_USER_PAGES,{variables:{userId:token?.id}});
@@ -52,49 +54,176 @@ const PagesSection = () => {
   const [likePage] = useMutation(LIKE_PAGE);
 
 
+  
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        console.log("✅ User location:", { lat, lon });
+  
+        setUserLocation({
+          type: "Point",
+          coordinates: [lon, lat]
+        });
+      },
+      (err) => {
+        console.error("❌ Location error:", err.message);
+  
+        // fallback Jaipur
+        setUserLocation({
+          type: "Point",
+          coordinates: [75.8574194, 25.1737019]
+        });
+      }
+    );
+  }, []);
+  
+  
+
+
+  const getLocationName = async (lat, lng) => {
+    const apiKey = "2bf06013c4314aeeab73c663d290eb8b";
+    const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}`);
+    const data = await response.json();
+    const locationName = data?.results?.[0]?.formatted;
+    return locationName;
+  };
+
+
+  // const handleCreatePage = async () => {
+  //   if (!token) {
+  //     toast.error('Please login to create a page');
+  //     return;
+  //   }
+  //   if(!pageForm.name || !pageForm.category || !pageForm.description || !coverImage || !profileImage){
+  //     toast.warning('All fields are required to create a page');
+  //     return;
+  //   }
+    
+  //   setIsCreatingPage(true); // Start loading
+  //   console.log(pageForm,coverImage,profileImage);
+    
+  //   try {
+  //     const { data } = await createPage({
+  //       variables: {
+  //         title: pageForm.name,
+  //         category: pageForm.category,
+  //         description: pageForm.description,
+  //         userId: token?.id,
+  //         profileImage: profileImage,
+  //         coverImage: coverImage
+  //       }
+  //     });
+      
+  //     if(data?.createPage){
+  //       toast.success('Page created successfully! 🎉', {
+  //         position: "top-right",
+  //         autoClose: 3000,
+  //         hideProgressBar: false,
+  //         closeOnClick: true,
+  //         pauseOnHover: true,
+  //         draggable: true,
+  //       });
+  //       // Reset form
+  //       setPageForm({ name: '', category: '', description: '' });
+  //       setCoverImage(null);
+  //       setProfileImage(null);
+  //       setCoverPreview('');
+  //       setProfilePreview('');
+  //     }
+  //     setIsCreateModalOpen(false);
+  //   } catch (error) {
+  //     toast.error('Error creating page. Please try again.', {
+  //       position: "top-right",
+  //       autoClose: 4000,
+  //       hideProgressBar: false,
+  //       closeOnClick: true,
+  //       pauseOnHover: true,
+  //       draggable: true,
+  //     });
+  //     console.log(error);
+  //   } finally {
+  //     setIsCreatingPage(false); // Stop loading
+  //   }
+  // };
+
+
+
+
+
   const handleCreatePage = async () => {
     if (!token) {
       toast.error('Please login to create a page');
       return;
     }
-    if(!pageForm.name || !pageForm.category || !pageForm.description || !coverImage || !profileImage){
+  
+    if (!pageForm.name || !pageForm.category || !pageForm.description || !coverImage || !profileImage) {
       toast.warning('All fields are required to create a page');
       return;
     }
-    
+  
     setIsCreatingPage(true); // Start loading
-    console.log(pageForm,coverImage,profileImage);
-    
+    console.log(pageForm, coverImage, profileImage);
+  
+    // ✅ Location logic start
     try {
-      const { data } = await createPage({
-        variables: {
-          title: pageForm.name,
-          category: pageForm.category,
-          description: pageForm.description,
-          userId: token?.id,
-          profileImage: profileImage,
-          coverImage: coverImage
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          console.log("✅ Coordinates obtained:", { latitude, longitude });
+  
+          // Step 1: Get location name
+          const locationName = await getLocationName(latitude, longitude); // Make sure this function is available
+  
+          // Step 2: Create page with location data
+          const { data } = await createPage({
+            variables: {
+              title: pageForm.name,
+              category: pageForm.category,
+              description: pageForm.description,
+              userId: token?.id,
+              profileImage: profileImage,
+              coverImage: coverImage,
+              locationName: locationName || null,
+              location: {
+                type: "Point",
+                coordinates: [longitude, latitude],
+              },
+            }
+          });
+  
+          if (data?.createPage) {
+            toast.success('Page created successfully! 🎉', {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+            });
+  
+            // Reset form
+            setPageForm({ name: '', category: '', description: '' });
+            setCoverImage(null);
+            setProfileImage(null);
+            setCoverPreview('');
+            setProfilePreview('');
+            setIsCreateModalOpen(false);
+          }
+  
+          setIsCreatingPage(false);
+        },
+  
+        // 🔴 Location access failed
+        (error) => {
+          console.error("Location error:", error);
+          setIsCreatingPage(false);
+          toast.error("Location access denied. Cannot get location info.");
         }
-      });
-      
-      if(data?.createPage){
-        toast.success('Page created successfully! 🎉', {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-        // Reset form
-        setPageForm({ name: '', category: '', description: '' });
-        setCoverImage(null);
-        setProfileImage(null);
-        setCoverPreview('');
-        setProfilePreview('');
-      }
-      setIsCreateModalOpen(false);
+      );
     } catch (error) {
+      console.error('Error creating page:', error);
       toast.error('Error creating page. Please try again.', {
         position: "top-right",
         autoClose: 4000,
@@ -103,11 +232,11 @@ const PagesSection = () => {
         pauseOnHover: true,
         draggable: true,
       });
-      console.log(error);
-    } finally {
-      setIsCreatingPage(false); // Stop loading
+      setIsCreatingPage(false);
     }
   };
+
+  
 
   // Navigate to page detail
   const handlePageClick = (pageId) => {

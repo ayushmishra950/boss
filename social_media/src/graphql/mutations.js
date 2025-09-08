@@ -20,6 +20,42 @@ export const GET_ALL_PAGES = gql`
   }
 `;
 
+export const ALL_GET_PAGE_POSTS = gql`
+  query GetPagePosts($pageId: ID!) {
+    getPagePosts(pageId: $pageId) {
+      id
+      caption
+      imageUrl
+      videoUrl
+      createdAt
+      createdBy {
+        id
+        title
+        profileImage
+      }
+      likes {
+       user{
+       id
+       }
+      }
+
+    }
+  }
+`;
+
+
+export const LIKE_PAGE_POST = gql`
+  mutation LikePagePost($userId: ID!, $postId: ID!) {
+    likePagePost(userId: $userId, postId: $postId)
+  }
+`;
+
+export const COMMENT_PAGE_POST = gql`
+  mutation CommentPagePost($postId: ID!, $comment: String!) {
+    commentPagePost(postId: $postId, comment: $comment)
+  }
+`;
+
 
 export const ADD_CATEGORY_PAGE = gql`
   mutation AddCategoryPage($name: String!, $userId: ID!) {
@@ -57,7 +93,16 @@ export const GET_ALL_CATEGORIES_PAGES = gql`
 `;
 
 export const CREATE_PAGE = gql`
-  mutation CreatePage( $title: String!, $category: String!, $description: String, $userId: ID!, $profileImage: Upload, $coverImage: Upload ) {
+  mutation CreatePage(
+    $title: String!
+    $category: String!
+    $description: String
+    $userId: ID!
+    $profileImage: Upload
+    $coverImage: Upload
+    $locationName: String
+    $location: LocationInput
+  ) {
     createPage(
       title: $title
       category: $category
@@ -65,6 +110,8 @@ export const CREATE_PAGE = gql`
       userId: $userId
       profileImage: $profileImage
       coverImage: $coverImage
+      locationName: $locationName
+      location: $location
     ) {
       id
       title
@@ -76,6 +123,7 @@ export const CREATE_PAGE = gql`
     }
   }
 `;
+
 
 export const CREATE_PAGE_POST = gql`
   mutation CreatePagePost(
@@ -101,12 +149,7 @@ export const CREATE_PAGE_POST = gql`
       createdBy {
         id
       }
-      actualUser {
-        id
-        name
-        username
-        profileImage
-      }
+     
     }
   }
 `;
@@ -120,8 +163,8 @@ export const LIKE_PAGE = gql`
 
 
 export const GET_SUGGESTED_PAGES = gql`
-  query {
-    getSuggestedPages {
+  query GetSuggestedPages($userLocation: LocationInput) {
+    getSuggestedPages(userLocation: $userLocation) {
       id
       title
       category
@@ -137,6 +180,7 @@ export const GET_SUGGESTED_PAGES = gql`
     }
   }
 `;
+
 
 export const GET_LIKED_PAGES = gql`
   query GetLikedPages($userId: ID!) {
@@ -197,12 +241,8 @@ export const GET_PAGE_POSTS = gql`
         id
         title
         profileImage
-      }
-      actualUser {
-        id
         name
         username
-        profileImage
       }
     }
   }
@@ -609,7 +649,7 @@ export const GET_BLOCKED_COUNT = gql`
 `;
 
 
- export const GET_USER_LIKED_POSTS = gql`
+export const GET_USER_LIKED_POSTS = gql`
   query GetUserLikedPosts($userId: ID!) {
     getUserLikedPosts(userId: $userId) {
        id
@@ -620,7 +660,7 @@ export const GET_BLOCKED_COUNT = gql`
   }
 `;
 
- export const GET_USER_COMMENTED_POSTS = gql`
+export const GET_USER_COMMENTED_POSTS = gql`
   query getUserCommentedPosts($userId: ID!) {
     getUserCommentedPosts(userId: $userId) {
        id
@@ -643,7 +683,7 @@ export const GET_USER_LIKED_VIDEOS = gql`
   }
 `;
 
- export const GET_USER_COMMENTED_VIDEOS = gql`
+export const GET_USER_COMMENTED_VIDEOS = gql`
   query getUserCommentedVideos($userId: ID!) {
     getUserCommentedVideos(userId: $userId) {
        id

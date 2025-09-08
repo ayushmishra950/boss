@@ -21,6 +21,21 @@ const pageSchema = new mongoose.Schema(
         type: String,
         default: "",
       },
+      locationName: {
+        type: String,  // e.g., "Goa, India"
+        default: null,
+      },
+      location: {
+        type: {
+          type: String,
+          enum: ['Point'],
+          default: 'Point',
+        },
+        coordinates: {
+          type: [Number],  // [longitude, latitude]
+          default: undefined,
+        },
+      },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
