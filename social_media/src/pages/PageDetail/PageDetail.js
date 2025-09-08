@@ -28,7 +28,6 @@ const PageDetail = () => {
   const [comment, setComment] = useState("");
   const [deletePage] = useMutation(DELETE_PAGE);
   const { data: allPagesData, loading: allPagesLoading } = useQuery(GET_ALL_PAGES);
-
   useEffect(() => {
       const tokens = GetTokenFromCookie();
       if (tokens?.id) {
@@ -107,6 +106,7 @@ const PageDetail = () => {
       skip: !pageId,
       onCompleted: (data) => {
         if (data?.getPagePosts) {
+          console.log(data.getPagePosts);
           const formattedPosts = data.getPagePosts.map(post => ({
             id: post.id,
             userAvatar: post.createdBy?.profileImage || 'https://via.placeholder.com/40',
@@ -115,8 +115,8 @@ const PageDetail = () => {
             caption: post.caption || '',
             media: post.videoUrl || post.imageUrl || '',
             type: post.videoUrl ? 'video' : 'image',
-            likes: [],
-            comments: []
+            likes: post.likes || [],
+            comments: post.comments || []
           }));
           setPosts(formattedPosts);
         }
@@ -152,6 +152,7 @@ const PageDetail = () => {
 
 
   const handleLikePagePost = async (postId) => {
+    if (!token?.id || !postId) return alert("User ID or Post ID is missing");
     try {
       const response = await likePagePost({
         variables: {
@@ -574,42 +575,43 @@ const PageDetail = () => {
               <PostCard 
                 key={post.id}
                 post={post}
-                onLike={async (postId, liked) => {
-                  try {
-                    await handleLikePagePost(postId);
-                    return true; // Indicate success
-                  } catch (error) {
-                    console.error('Error handling like:', error);
-                    return false; // Indicate failure
-                  }
-                }}
-                onComment={async (postId, commentText) => {
-                  try {
-                    await handleCommentSubmit(postId);
-                    setPosts(posts.map(p => 
-                      p.id === postId 
-                        ? { 
-                            ...p, 
-                            comments: [
-                              ...p.comments, 
-                              { 
-                                id: Date.now(), 
-                                user: currentUser?.name || currentUser?.username || 'User', 
-                                text: commentText 
-                              }
-                            ] 
-                          } 
-                        : p
-                    ));
-                    setComment(''); // Clear the comment input after successful submission
-                  } catch (error) {
-                    console.error('Error submitting comment:', error);
-                  }
-                }}
-                onShare={(post) => {
-                  // Implement share functionality
-                  console.log('Sharing post:', post.id);
-                }}
+                // onLike={async (postId, liked) => {
+                //   try {
+                //     await handleLikePagePost(postId);
+                //     return true; // Indicate success
+                //   } catch (error) {
+                //     console.error('Error handling like:', error);
+                //     return false; // Indicate failure
+                //   }
+                // }}
+              //   onComment={async (postId, commentText) => {
+              //     try {
+              //       await handleCommentSubmit(postId);
+              //       setPosts(posts.map(p => 
+              //         p.id === postId 
+              //           ? { 
+              //               ...p, 
+              //               comments: [
+              //                 ...p.comments, 
+              //                 { 
+              //                   id: Date.now(), 
+              //                   user: currentUser?.name || currentUser?.username || 'User', 
+              //                   text: commentText 
+              //                 }
+              //               ] 
+              //             } 
+              //           : p
+              //       ));
+              //       setComment(''); // Clear the comment input after successful submission
+              //     } catch (error) {
+              //       console.error('Error submitting comment:', error);
+              //     }
+              //   }
+              // }
+                // onShare={(post) => {
+                //   // Implement share functionality
+                //   console.log('Sharing post:', post.id);
+                // }}
               />
             ))}
           </div>

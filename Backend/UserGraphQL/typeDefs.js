@@ -367,6 +367,8 @@ createPost(
     # ✅ PageByUser Mutations
     createPagePost(caption: String!, image: Upload, video: Upload, thumbnail: Upload, pageId: ID!): PageByUser
     likePagePost(userId: ID!, postId: ID!): String!
+    pagescommentLikeReply(userId: ID!, commentId: ID!,pageId: ID!): String!
+    pagesReplyToComment(userId: ID!, commentId: ID!,pageId: ID!, text: String!): String!
     commentPagePost(userId: ID!, postId: ID!, comment: String!): String!
    
   }

@@ -14,6 +14,7 @@ const ActivityLog = require('../Models/ActivityLog');
 const FollowRequest = require('../Models/FollowRequest');
 const { uploadToCloudinary } = require('../Utils/cloudinary');
 const { geocodeLocation } = require('../Location/location');
+const mongoose = require('mongoose'); 
 
 const otpStore = {};
 
@@ -1143,7 +1144,7 @@ hideStoryFrom: async (_, { userIds,currentUserId}, { currentUser }) => {
 
         if (!page || !user) throw new Error("User or Page not found");
 
-        if (page.likedBy.includes(userId)) {
+        if (page?.likedBy?.includes(userId)) {
           return "Page already liked";
         }
 
@@ -1251,42 +1252,131 @@ createPagePost: async (_, { caption, image, video, pageId }) => {
       }
     },
 
-    likePagePost: (_, { postId,userId }, context) => {
+    likePagePost: async (_, { postId, userId }) => {
+      try {
+        const post = await PageByUser.findById(postId);
+    
+        if (!post) {
+          throw new Error("Post nahi mila!");
+        }
+    
+        // Check if already liked
+        const alreadyLiked = post.likes.some(like => like.user.toString() === userId);
+    
+        if (alreadyLiked) {
+          // Unlike
+          post.likes = post.likes.filter(like => like.user.toString() !== userId);
+          await post.save();
+    
+          return "Page post unliked successfully";
+        } else {
+          // Like
+          post.likes.push({ user: userId, likedAt: new Date() });
+          await post.save();
+    
+          return "Page post liked successfully";
+        }
+    
+      } catch (error) {
+        console.error("Error liking/unliking post:", error);
+        throw new Error("Failed to like/unlike post");
+      }
+    },    
 
-      const post = PageByUser.findById(postId);
+    commentPagePost: async (_, {userId, postId, comment }) => {
+      const post = await PageByUser.findById(postId);
       if (!post) {
         throw new Error("Post nahi mila!");
       }
 
-      const alreadyLiked = post.likedBy.includes(userId);
+      post.comments.push({
+        user: userId,
+        text: comment,
+        commentedAt: new Date(),
+        likes: [],
+        replies: []
+      });
 
-      if (alreadyLiked) {
-        // Unlike karna hai
-        post.likedBy = post.likedBy.filter(id => id !== userId);
-        post.likes -= 1;
-
-        return "pages post Unlike successfully" 
-      } else {
-        // Like karna hai
-        post.likedBy.push(userId);
-        post.likes += 1;
-
-        return "pages post like successfully" 
-
-      }
-    },
-
-    commentPagePost: (_, { postId, comment }) => {
-      const post = PageByUser.findById(postId);
-      if (!post) {
-        throw new Error("Post nahi mila!");
-      }
-
-      post.comments.push(comment);
+      await post.save();
 
       return "Commented successfully"
     },
 
+    // likeComment(commentId, userId)
+
+    pagescommentLikeReply: async (_, { pageId, commentId, userId }, { user }) => {
+      try {
+        if (!userId) throw new Error("Authentication required");
+    
+        const page = await PageByUser.findById(pageId);
+        if (!page) throw new Error("Page not found");
+    
+        const comment = page.comments.id(commentId);
+        if (!comment) throw new Error("Comment not found");
+    
+        // Ensure likes array exists
+        if (!comment.likes) comment.likes = [];
+    
+        // Check if user already liked
+        const existingLikeIndex = comment.likes.findIndex(
+          (like) => like.user?.toString() === userId.toString()
+        );
+    
+        if (existingLikeIndex > -1) {
+          // Unlike
+          comment.likes.splice(existingLikeIndex, 1);
+        } else {
+          // Like
+          comment.likes.push({
+            user: userId,
+            likedAt: new Date()
+          });
+        }
+    
+        // Let mongoose know we modified subdoc
+        comment.markModified('likes');
+        await page.save();
+    
+        return existingLikeIndex > -1
+          ? "Comment unliked successfully."
+          : "Comment liked successfully.";
+    
+      } catch (error) {
+        console.error("likeReply Error:", error.message);
+        throw new Error(error.message || "Something went wrong while liking the comment.");
+      }
+    },    
+
+    pagesReplyToComment: async (_, { pageId, commentId, userId, text }, { user }) => {
+      try {
+        if (!userId) throw new Error("Authentication required");
+        if (!text || text.trim() === "") throw new Error("Reply text is required");
+    
+        const page = await PageByUser.findById(pageId);
+        if (!page) throw new Error("Page not found");
+    
+        const comment = page.comments.id(commentId);
+        if (!comment) throw new Error("Comment not found");
+    
+        const reply = {
+          _id: new mongoose.Types.ObjectId(),
+          user: userId,
+          text: text,
+          repliedAt: new Date(),
+          likes: []
+        };
+    
+        comment.replies.push(reply);
+        comment.markModified('replies'); // Force Mongoose to track change
+        await page.save();
+    
+        return "Reply To Comment Successfully..."; // returning the newly added reply
+    
+      } catch (error) {
+        console.error("replyToComment Error:", error.message);
+        throw new Error(error.message || "Something went wrong while replying to the comment.");
+      }
+    },    
 //     createPost: async (_, { id, caption, image, video, thumbnail, locationName }) => {
 //   let imageUrl = null;
 //   let videoUrl = null;

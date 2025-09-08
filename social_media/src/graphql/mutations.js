@@ -1,5 +1,17 @@
 import { gql } from "@apollo/client";
 
+export const PAGES_COMMENT_LIKE_REPLY = gql`
+  mutation PagesCommentLikeReply($pageId: ID!, $commentId: ID!, $userId: ID!) {
+    pagescommentLikeReply(pageId: $pageId, commentId: $commentId, userId: $userId)
+  }
+`;
+
+export const PAGES_REPLY_TO_COMMENT = gql`
+  mutation PagesReplyToComment($pageId: ID!, $commentId: ID!, $userId: ID!, $text: String!) {
+    pagesReplyToComment(pageId: $pageId, commentId: $commentId, userId: $userId, text: $text)
+  }
+`;
+
 export const GET_ALL_PAGES = gql`
   query GetAllPages {
     getAllPages {
@@ -38,6 +50,26 @@ export const ALL_GET_PAGE_POSTS = gql`
        id
        }
       }
+       comments {
+       id
+        text
+        user {
+          id
+        }
+        likes {
+          user {
+            id
+          }
+        }
+          replies{
+          id
+          text
+          user{
+          id
+          
+}
+          }
+       }
 
     }
   }
@@ -51,10 +83,11 @@ export const LIKE_PAGE_POST = gql`
 `;
 
 export const COMMENT_PAGE_POST = gql`
-  mutation CommentPagePost($postId: ID!, $comment: String!) {
-    commentPagePost(postId: $postId, comment: $comment)
-  }
+mutation CommentPagePost($userId: ID!, $postId: ID!, $comment: String!) {
+  commentPagePost(userId: $userId, postId: $postId, comment: $comment)
+}
 `;
+
 
 
 export const ADD_CATEGORY_PAGE = gql`

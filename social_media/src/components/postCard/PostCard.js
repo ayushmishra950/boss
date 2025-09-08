@@ -1,40 +1,174 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisV, FaPlayCircle } from 'react-icons/fa';
+import { useQuery,useMutation } from '@apollo/client';
+import { PAGES_COMMENT_LIKE_REPLY,PAGES_REPLY_TO_COMMENT,LIKE_PAGE_POST,COMMENT_PAGE_POST} from '../../graphql/mutations';
+import {GetTokenFromCookie} from "../../components/getToken/GetToken"
 
-const PostCard = ({ post, onLike, onComment, onShare }) => {
+const PostCard = ({ post }) => {
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [isSaved, setIsSaved] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
+    const [token,setToken] = useState();
+    const [comment, setComment] = useState("");
   const [isLiking, setIsLiking] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [showReplies, setShowReplies] = useState({});
+  const [likePagePost] = useMutation(LIKE_PAGE_POST)
+  const [commentPagePost] = useMutation(COMMENT_PAGE_POST)
+  const [pagescommentLikeReply, { loading, error }] = useMutation(PAGES_COMMENT_LIKE_REPLY);
+  const [pagesReplyToComment] = useMutation(PAGES_REPLY_TO_COMMENT)
 
-  const handleLike = async (e) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    
-    if (isLiking) return;
+     useEffect(() => {
+          const tokens = GetTokenFromCookie();
+          if (tokens?.id) {
+            setToken(tokens);
+          }
+        }, []);
+
+        const handleLikeReply = async (commentId) => {
+          console.log(post?.id, commentId, token?.id)
+            if(!post?.id || !commentId || !token?.id) {return alert("all field missing")}
+          try {
+            const { data } = await pagescommentLikeReply({
+              variables: {
+                pageId : post?.id,
+                commentId : commentId,
+                userId : token?.id,
+              },
+            });
+            console.log(data); // success message from server
+          } catch (err) {
+            console.error('Like error:', err);
+          }
+        };  
+
+  const handleCommentReply = async (commentId) => {
+    if (!post?.id || !commentId || !token?.id || !replyText.trim()) {
+      return;
+    }
     
     try {
-      setIsLiking(true);
-      await onLike?.(post.id, !isLiked);
-      setIsLiked(!isLiked);
-    } finally {
-      setIsLiking(false);
+      const { data } = await pagesReplyToComment({
+        variables: {
+          pageId: post.id,
+          commentId: commentId,
+          userId: token.id,
+          text: replyText.trim()
+        }
+      });
+      
+      if (data?.pagesReplyToComment) {
+        setReplyText('');
+        setReplyingTo(null);
+        // Show the replies after adding a new one
+        setShowReplies(prev => ({
+          ...prev,
+          [commentId]: true
+        }));
+        
+        // You might want to update the UI with the new reply here
+        // or refresh the comments list if needed
+        console.log('Reply successful:', data);
+      }
+    } catch (error) {
+      console.error('Error replying to comment:', error);
+      alert('Failed to post reply. Please try again.');
     }
   };
 
-  const handleComment = (e) => {
+  const handleLikePagePost = async (postId) => {
+    try {
+      const userToken = GetTokenFromCookie();
+      if (!userToken?.id) {
+        return alert("Please login to like this post");
+      }
+      
+      if (!postId) {
+        console.error("Post ID is missing");
+        return;
+      }
+      
+      // Optimistic UI update
+      const previousIsLiked = isLiked;
+      setIsLiked(!previousIsLiked);
+      
+      try {
+        const response = await likePagePost({
+          variables: {
+            userId: userToken.id,
+            postId: postId,
+          },
+        });
+        
+        if (!response || !response.data || !response.data.likePagePost) {
+          throw new Error("Invalid response from server");
+        }
+        
+        console.log("✅ Like successful:", response.data.likePagePost);
+        
+      } catch (mutationError) {
+        // Revert the optimistic update on error
+        setIsLiked(previousIsLiked);
+        console.error("❌ Error in like mutation:", mutationError);
+        
+        // Check for specific error cases
+        if (mutationError.networkError) {
+          console.error("Network error:", mutationError.networkError);
+          alert("Network error. Please check your connection and try again.");
+        } else if (mutationError.graphQLErrors && mutationError.graphQLErrors.length > 0) {
+          console.error("GraphQL errors:", mutationError.graphQLErrors);
+          alert("Error processing your like. Please try again.");
+        } else {
+          console.error("Unexpected error:", mutationError);
+          alert("An unexpected error occurred. Please try again.");
+        }
+      }
+      
+    } catch (err) {
+      console.error("❌ Unexpected error in handleLikePagePost:", err);
+      alert("An error occurred. Please try again.");
+    }
+  };
+
+
+  const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (commentText.trim()) {
-      onComment?.(post.id, commentText);
-      setCommentText('');
-      setShowCommentInput(false);
+    
+    const userToken = GetTokenFromCookie();
+    if (!userToken?.id) {
+      return alert("Please login to comment");
+    }
+    
+    if (!commentText.trim()) {
+      alert("Comment khaali nahi ho sakta!");
+      return;
+    }
+
+    try {
+      const response = await commentPagePost({
+        variables: {
+          userId: userToken?.id,
+          postId: post.id,
+          comment: commentText.trim(),
+        },
+      });
+
+      console.log("✅ Comment response:", response);
+      setCommentText(""); // Clear input
+      setShowCommentInput(false); // Hide comment input
+      
+      // You might want to refresh comments here or update the UI accordingly
+      
+    } catch (err) {
+      console.error("❌ Error while commenting:", err);
+      alert("Comment bhejne me error aaya. Please try again.");
     }
   };
 
-  const handleShare = () => {
-    alert('Post shared!');
-  };
+
+  
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-5 relative">
@@ -91,15 +225,14 @@ const PostCard = ({ post, onLike, onComment, onShare }) => {
           {/* Action Buttons Overlay */}
           <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             <button 
-              onClick={handleLike}
+              onClick={() => {handleLikePagePost(post.id)}}
               className={`flex flex-col items-center text-white bg-black bg-opacity-60 rounded-full p-3 hover:bg-opacity-80 transition-all`}
             >
               <FaHeart className={`text-xl ${isLiked ? 'text-red-500 fill-current' : 'text-white'}`} />
-              <span className="text-xs mt-1">{(post.likes || 0) + (isLiked ? 1 : 0)}</span>
+              <span className="text-xs mt-1">{(post.likes.length || 0)}</span>
             </button>
             
             <button 
-              onClick={handleShare}
               className="flex flex-col items-center text-white bg-black bg-opacity-60 rounded-full p-3 hover:bg-opacity-80 transition-all"
             >
               <FaShare className="text-xl" />
@@ -116,10 +249,10 @@ const PostCard = ({ post, onLike, onComment, onShare }) => {
           <div className="flex space-x-4">
             <button 
               className={`p-2 rounded-full ${isLiked ? 'text-red-500' : 'text-gray-600'} hover:bg-gray-100`}
-              onClick={handleLike}
+              onClick={() => {handleLikePagePost(post.id)}}
             >
               <FaHeart className={isLiked ? 'fill-current' : ''} />
-              <span className="text-xs font-medium ml-1">{(post.likes || 0) + (isLiked ? 1 : 0)}</span>
+              <span className="text-xs font-medium ml-1">{(post.likes.length || 0)}</span>
             </button>
             
             <button 
@@ -132,7 +265,6 @@ const PostCard = ({ post, onLike, onComment, onShare }) => {
             
             <button 
               className="p-2 rounded-full text-gray-600 hover:bg-gray-100"
-              onClick={handleShare}
             >
               <FaShare />
             </button>
@@ -158,10 +290,10 @@ const PostCard = ({ post, onLike, onComment, onShare }) => {
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Write a comment..."
                   className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === 'Enter' && handleComment(e)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleCommentSubmit(e)}
                 />
                 <button 
-                  onClick={handleComment}
+                  onClick={handleCommentSubmit}
                   className="ml-2 bg-purple-600 text-white px-4 py-2 rounded-full hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
                 >
                   Post
@@ -196,11 +328,88 @@ const PostCard = ({ post, onLike, onComment, onShare }) => {
                       </div>
                       <div className="mt-1 bg-gray-100 rounded-2xl px-3 py-2">
                         <p className="text-sm text-gray-800">{comment.text}</p>
+                        <div className="flex items-center space-x-4 mt-2">
+                          <button 
+                            className="text-xs text-gray-500 hover:text-blue-500 flex items-center"
+                            onClick={() => handleLikeReply(comment.id)}
+                          >
+                            <FaHeart className={`mr-1 ${comment.likes?.some(like => like.user?.id === token?.id) ? 'text-red-500' : ''}`} />
+                            {comment.likes?.length || 0}
+                          </button>
+                          <button 
+                            className="text-xs text-gray-500 hover:text-blue-500 flex items-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('Comment replies:', comment.replies); // Debug log
+                              setShowReplies(prev => ({
+                                ...prev,
+                                [comment.id]: !prev[comment.id]
+                              }));
+                            }}
+                          >
+                            <FaComment className="mr-1" />
+                            {Array.isArray(comment.replies) ? comment.replies.length : 0}
+                          </button>
+                          <button 
+                            className="text-xs text-gray-500 hover:text-blue-500 ml-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReplyingTo(replyingTo === comment.id ? null : comment.id);
+                            }}
+                          >
+                            Reply
+                          </button>
+                        </div>
+                        {replyingTo === comment.id && (
+                          <div className="mt-2 flex space-x-2">
+                            <input
+                              type="text"
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                              className="flex-1 text-sm border rounded-full px-3 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Write a reply..."
+                              onKeyPress={(e) => e.key === 'Enter' && handleCommentReply(comment.id)}
+                            />
+                            <button
+                              onClick={() => handleCommentReply(comment.id)}
+                              className="bg-blue-500 text-white text-sm px-3 py-1 rounded-full hover:bg-blue-600 focus:outline-none"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* Display Replies */}
+                        {Array.isArray(comment.replies) && comment.replies.length > 0 && showReplies[comment.id] && (
+                          <div className="mt-2 pl-4 border-l-2 border-gray-200">
+                            {comment.replies.map((reply, replyIndex) => (
+                              <div key={replyIndex} className="mb-3">
+                                <div className="flex items-start">
+                                  <div className="flex-shrink-0 mr-2">
+                                    <img 
+                                      src={reply.user?.profileImage || '/default-avatar.png'}
+                                      alt={reply.user?.username || 'User'}
+                                      className="w-6 h-6 rounded-full object-cover border border-gray-200"
+                                    />
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center">
+                                      <span className="font-semibold text-xs text-gray-900">{reply.user?.title || 'User'}</span>
+                                      <span className="mx-1.5 text-gray-400">•</span>
+                                      <span className="text-xs text-gray-500">{reply.timeAgo || 'Just now'}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-700 mt-0.5 pl-0">{reply.text}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-1 flex space-x-4 text-xs text-gray-500">
-                        <button className="hover:text-gray-700">Like</button>
+                      {/* <div className="mt-1 flex space-x-4 text-xs text-gray-500">
+                        <button className="hover:text-gray-700" >Like</button>
                         <button className="hover:text-gray-700">Reply</button>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                 </div>
